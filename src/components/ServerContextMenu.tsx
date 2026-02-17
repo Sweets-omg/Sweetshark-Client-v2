@@ -51,6 +51,12 @@ export function ServerContextMenu({
   }, [onClose]);
 
   return (
+    <>
+      {/* Fullscreen transparent overlay — catches clicks on iframes and everywhere else */}
+      <div
+        className="fixed inset-0 z-40"
+        onMouseDown={onClose}
+      />
     <div
       ref={menuRef}
       className="fixed bg-[#111214] rounded-md shadow-lg py-2 min-w-[200px] z-50 border border-[#1e1f22]"
@@ -106,5 +112,6 @@ export function ServerContextMenu({
         Remove Server
       </button>
     </div>
+    </>
   );
 }
