@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Upload } from 'lucide-react';
 import type { Server } from '../types';
-import { serverApi, generateRandomColor, generateServerId } from '../utils';
+import { serverApi, generateServerId } from '../utils';
 
 interface AddServerDialogProps {
   isOpen: boolean;
@@ -66,7 +66,6 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
         id: generateServerId(),
         name: name.trim(),
         url: cleanUrl,
-        color: generateRandomColor(),
         icon: icon || undefined,
         keepLoaded: true, // Default to true
       };
@@ -99,7 +98,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#313338] rounded-lg w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="bg-[var(--window-bg)] rounded-lg w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto">
         {/* Close button */}
         <button
           onClick={handleClose}
@@ -123,7 +122,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
               Server Icon <span className="text-gray-500">(Optional)</span>
             </label>
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-[#1e1f22] flex items-center justify-center overflow-hidden">
+              <div className="w-16 h-16 rounded-full bg-[var(--window-bg-secondary)] flex items-center justify-center overflow-hidden">
                 {icon ? (
                   <img src={icon} alt="Server icon" className="w-full h-full object-cover" />
                 ) : (
@@ -136,7 +135,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
                 type="button"
                 onClick={handleFileSelect}
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-[#1e1f22] text-gray-300 rounded hover:bg-[#2b2d31] transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 bg-[var(--window-bg-secondary)] text-gray-300 rounded hover:bg-[var(--window-bg-secondary)] transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Upload className="w-4 h-4" />
                 {icon ? 'Change' : 'Upload'} Icon
@@ -166,7 +165,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
               onChange={(e) => setName(e.target.value)}
               placeholder="My Awesome Server"
               disabled={isSubmitting}
-              className="w-full bg-[#1e1f22] text-white px-3 py-2 rounded border border-transparent focus:border-[#5865F2] outline-none transition-colors disabled:opacity-50"
+              className="w-full bg-[var(--window-bg-secondary)] text-white px-3 py-2 rounded border border-transparent focus:border-[var(--accent)] outline-none transition-colors disabled:opacity-50"
             />
           </div>
 
@@ -182,7 +181,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
               onChange={(e) => setUrl(e.target.value)}
               placeholder="localhost:4991 or https://sharkord.example.com"
               disabled={isSubmitting}
-              className="w-full bg-[#1e1f22] text-white px-3 py-2 rounded border border-transparent focus:border-[#5865F2] outline-none transition-colors disabled:opacity-50"
+              className="w-full bg-[var(--window-bg-secondary)] text-white px-3 py-2 rounded border border-transparent focus:border-[var(--accent)] outline-none transition-colors disabled:opacity-50"
             />
           </div>
 
@@ -207,7 +206,7 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-[#5865F2] text-white rounded hover:bg-[#4752C4] transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50"
             >
               {isSubmitting ? 'Adding...' : 'Add Server'}
             </button>

@@ -48,7 +48,7 @@ export function RenameServerDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#313338] rounded-lg w-full max-w-md p-6 relative">
+      <div className="bg-[var(--window-bg)] rounded-lg w-full max-w-md p-6 relative">
         {/* Close button */}
         <button
           onClick={handleClose}
@@ -77,7 +77,7 @@ export function RenameServerDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="My Server"
               autoFocus
-              className="w-full bg-[#1e1f22] text-white px-3 py-2 rounded border border-transparent focus:border-[#5865F2] outline-none transition-colors"
+              className="w-full bg-[var(--window-bg-secondary)] text-white px-3 py-2 rounded border border-transparent focus:border-[var(--accent)] outline-none transition-colors"
             />
           </div>
 
@@ -99,7 +99,7 @@ export function RenameServerDialog({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#5865F2] text-white rounded hover:bg-[#4752C4] transition-colors"
+              className="px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent-hover)] transition-colors"
             >
               Rename
             </button>

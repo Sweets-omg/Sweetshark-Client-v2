@@ -59,35 +59,35 @@ export function ServerContextMenu({
       />
     <div
       ref={menuRef}
-      className="fixed bg-[#111214] rounded-md shadow-lg py-2 min-w-[200px] z-50 border border-[#1e1f22]"
+      className="fixed bg-[var(--window-bg-secondary)] rounded-md shadow-lg py-2 min-w-[200px] z-50 border border-[var(--window-bg-secondary)]"
       style={{
         top: `${y}px`,
         left: `${x}px`,
       }}
     >
       {/* Server name header */}
-      <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase border-b border-[#1e1f22]">
+      <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase border-b border-[var(--window-bg-secondary)]">
         {serverName}
       </div>
 
       {/* Menu items */}
       <button
         onClick={onRename}
-        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#5865F2] text-left transition-colors"
+        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[var(--accent)] text-left transition-colors"
       >
         Rename Server
       </button>
 
       <button
         onClick={onChangeIcon}
-        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#5865F2] text-left transition-colors"
+        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[var(--accent)] text-left transition-colors"
       >
         Change Icon
       </button>
 
       <button
         onClick={onRefresh}
-        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#5865F2] text-left transition-colors"
+        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[var(--accent)] text-left transition-colors"
       >
         Refresh
       </button>
@@ -95,14 +95,14 @@ export function ServerContextMenu({
       {/* Keep Server Loaded with checkmark */}
       <button
         onClick={onToggleKeepLoaded}
-        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[#5865F2] text-left transition-colors flex items-center justify-between"
+        className="w-full px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-[var(--accent)] text-left transition-colors flex items-center justify-between"
       >
         <span>Keep Server Loaded</span>
         {keepLoaded && <Check className="w-4 h-4" />}
       </button>
 
       {/* Separator */}
-      <div className="my-1 border-t border-[#1e1f22]" />
+      <div className="my-1 border-t border-[var(--window-bg-secondary)]" />
 
       {/* Remove Server - danger color */}
       <button

@@ -15,10 +15,10 @@ export function WelcomeView({ onAddServer }: WelcomeViewProps) {
   };
 
   return (
-    <div className="flex-1 bg-[#313338] flex flex-col items-center justify-center p-8">
+    <div className="flex-1 bg-[var(--window-bg)] flex flex-col items-center justify-center p-8">
       <div className="max-w-md text-center space-y-6">
         {/* Icon */}
-        <div className="w-24 h-24 bg-[#5865F2] rounded-full flex items-center justify-center mx-auto">
+        <div className="w-24 h-24 bg-[var(--accent)] rounded-full flex items-center justify-center mx-auto">
           <ServerIcon className="w-12 h-12 text-white" />
         </div>
 
@@ -36,7 +36,7 @@ export function WelcomeView({ onAddServer }: WelcomeViewProps) {
         {/* Add server button */}
         <button
           onClick={onAddServer}
-          className="bg-[#5865F2] text-white px-8 py-3 rounded-lg hover:bg-[#4752C4] transition-colors text-lg font-semibold"
+          className="bg-[var(--accent)] text-white px-8 py-3 rounded-lg hover:bg-[var(--accent-hover)] transition-colors text-lg font-semibold"
         >
           Add Your First Server
         </button>
@@ -47,7 +47,7 @@ export function WelcomeView({ onAddServer }: WelcomeViewProps) {
             Unofficial client for{' '}
             <button
               onClick={handleSharkordLink}
-              className="text-[#5865F2] hover:underline cursor-pointer bg-transparent border-none"
+              className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-none transition-colors"
             >
               Sharkord
             </button>
@@ -56,7 +56,7 @@ export function WelcomeView({ onAddServer }: WelcomeViewProps) {
             Don't have a server yet?{' '}
             <button
               onClick={handleDocsLink}
-              className="text-[#5865F2] hover:underline cursor-pointer bg-transparent border-none"
+              className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer bg-transparent border-none transition-colors"
             >
               Learn how to set one up
             </button>

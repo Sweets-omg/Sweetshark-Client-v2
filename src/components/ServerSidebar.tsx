@@ -12,6 +12,8 @@ interface ServerSidebarProps {
   onAddServer: () => void;
   onRefreshServer: (serverId: string) => void;
   onServerRemoved: (serverId: string) => void;
+  onSettingsOpen: () => void;
+  isSettingsOpen: boolean;
   refreshTrigger?: number;
 }
 
@@ -22,7 +24,7 @@ interface ContextMenuState {
   server: Server | null;
 }
 
-export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, onServerRemoved, refreshTrigger }: ServerSidebarProps) {
+export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, onServerRemoved, onSettingsOpen, isSettingsOpen, refreshTrigger }: ServerSidebarProps) {
   const [servers, setServers] = useState<Server[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -185,14 +187,14 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, on
 
   return (
     <>
-      <div className="w-18 bg-[#1e1f22] flex flex-col items-center py-3 gap-2">
+      <div className="w-18 bg-[var(--sidebar-bg)] flex flex-col items-center py-3 gap-2">
         {/* Home button at top */}
         <button
           onClick={handleHomeClick}
           className={cn(
             'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200',
             'hover:rounded-2xl',
-            activeServerId === null ? 'bg-[#5865F2] rounded-2xl' : 'bg-[#313338] hover:bg-[#5865F2]'
+            activeServerId === null && !isSettingsOpen ? 'bg-[var(--accent)] rounded-2xl' : 'bg-[var(--server-circle)] hover:bg-[var(--accent)]'
           )}
           title="Home"
         >
@@ -200,7 +202,7 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, on
         </button>
 
         {/* Server separator */}
-        <div className="w-8 h-0.5 bg-[#313338] rounded-full my-1" />
+        <div className="w-8 h-0.5 bg-[var(--server-circle)] rounded-full my-1" />
 
         {/* Server list */}
         <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto w-full px-2">
@@ -214,7 +216,7 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, on
                 'hover:rounded-2xl relative group',
                 activeServerId === server.id ? 'rounded-2xl' : ''
               )}
-              style={{ backgroundColor: server.icon ? 'transparent' : server.color }}
+              style={{ backgroundColor: server.icon ? 'transparent' : 'var(--server-circle)' }}
               title={server.name}
             >
               {server.icon ? (
@@ -249,7 +251,7 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, on
           <button
             onClick={handleAddClick}
             className={cn(
-              'w-12 h-12 rounded-full bg-[#313338] flex items-center justify-center',
+              'w-12 h-12 rounded-full bg-[var(--server-circle)] flex items-center justify-center',
               'transition-all duration-200 hover:rounded-2xl hover:bg-[#23a559]'
             )}
             title="Add Server"
@@ -259,16 +261,17 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, on
         </div>
 
         {/* Settings button at bottom */}
-        <div className="w-8 h-0.5 bg-[#313338] rounded-full my-1" />
+        <div className="w-8 h-0.5 bg-[var(--server-circle)] rounded-full my-1" />
         
         <button
+          onClick={onSettingsOpen}
           className={cn(
-            'w-12 h-12 rounded-full bg-[#313338] flex items-center justify-center',
-            'transition-all duration-200 hover:rounded-2xl hover:bg-[#5865F2]'
+            'w-12 h-12 rounded-full flex items-center justify-center',
+            isSettingsOpen ? 'bg-[var(--accent)] rounded-2xl' : 'bg-[var(--server-circle)] hover:bg-[var(--accent)] transition-all duration-200 hover:rounded-2xl'
           )}
           title="Settings"
         >
-          <Settings className="w-5 h-5 text-gray-400 hover:text-white transition-colors" />
+          <Settings className="w-5 h-5 text-white" />
         </button>
       </div>
 

@@ -17,7 +17,7 @@ export function RemoveServerDialog({
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100]">
-      <div className="bg-[#313338] rounded-lg w-full max-w-md p-6 relative shadow-2xl">
+      <div className="bg-[var(--window-bg)] rounded-lg w-full max-w-md p-6 relative shadow-2xl">
         {/* Close button */}
         <button
           onClick={onClose}

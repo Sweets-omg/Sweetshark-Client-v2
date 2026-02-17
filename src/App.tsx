@@ -3,26 +3,37 @@ import { ServerSidebar } from './components/ServerSidebar';
 import { AddServerDialog } from './components/AddServerDialog';
 import { WelcomeView } from './components/WelcomeView';
 import { ServerView } from './components/ServerView';
+import { SettingsView } from './components/SettingsView';
 import type { Server } from './types';
+import { loadSettings, saveSettings, applySettings } from './useSettings';
+import type { AppSettings } from './useSettings';
 import './index.css';
 
 function App() {
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [serverRefreshTrigger, setServerRefreshTrigger] = useState<Record<string, number>>({});
-
-  // Pool of servers kept alive in the DOM (keepLoaded === true / undefined).
-  // Keyed by server id so we can update metadata without remounting.
   const [keptServers, setKeptServers] = useState<Record<string, Server>>({});
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const s = loadSettings();
+    applySettings(s);
+    return s;
+  });
+
+  // Persist and apply any settings change
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
 
   const handleServerSelect = (server: Server | null) => {
+    setShowSettings(false);
     if (server) {
-      const keepLoaded = server.keepLoaded !== false; // default true
+      const keepLoaded = server.keepLoaded !== false;
       if (keepLoaded) {
         setKeptServers(prev => ({ ...prev, [server.id]: server }));
       } else {
-        // Make sure it isn't lingering in the pool from a previous state
         setKeptServers(prev => {
           const next = { ...prev };
           delete next[server.id];
@@ -33,8 +44,6 @@ function App() {
     setSelectedServer(server);
   };
 
-  // Re-sync the kept pool whenever the selected server's keepLoaded flag changes
-  // (e.g. toggled via the context menu while the server is active).
   useEffect(() => {
     if (!selectedServer) return;
     const keepLoaded = selectedServer.keepLoaded !== false;
@@ -49,12 +58,15 @@ function App() {
     }
   }, [selectedServer]);
 
-  const handleAddServer = () => setIsAddDialogOpen(true);
+  const handleSettingsOpen = () => {
+    setShowSettings(true);
+    setSelectedServer(null);
+  };
 
+  const handleAddServer = () => setIsAddDialogOpen(true);
   const handleServerAdded = () => setRefreshTrigger(prev => prev + 1);
 
   const handleServerRemoved = (serverId: string) => {
-    // Evict deleted server from the kept-alive pool so its iframe is destroyed
     setKeptServers(prev => {
       const next = { ...prev };
       delete next[serverId];
@@ -70,41 +82,44 @@ function App() {
   };
 
   const activeId = selectedServer?.id ?? null;
-
-  // Build the list of server views we need to render:
-  // - All kept-alive servers (shown or hidden via CSS)
-  // - The active server if it has keepLoaded=false (render only while active)
   const renderedServers: Server[] = Object.values(keptServers);
   if (selectedServer && !keptServers[selectedServer.id]) {
     renderedServers.push(selectedServer);
   }
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[#313338]">
-      {/* Server Sidebar */}
+    <div className="h-screen w-screen flex overflow-hidden bg-[var(--window-bg)]">
       <ServerSidebar
         onServerSelect={handleServerSelect}
         onAddServer={handleAddServer}
         onRefreshServer={handleRefreshServer}
         onServerRemoved={handleServerRemoved}
+        onSettingsOpen={handleSettingsOpen}
+        isSettingsOpen={showSettings}
         refreshTrigger={refreshTrigger}
       />
 
-      {/* Main Content area */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Welcome screen - visible when no server is active */}
-        {!activeId && (
+        {/* Settings view */}
+        {showSettings && (
+          <div className="absolute inset-0 z-10">
+            <SettingsView settings={settings} onSettingsChange={setSettings} />
+          </div>
+        )}
+
+        {/* Welcome screen */}
+        {!activeId && !showSettings && (
           <div className="absolute inset-0">
             <WelcomeView onAddServer={handleAddServer} />
           </div>
         )}
 
-        {/* One ServerView per kept/active server; hidden with display:none when inactive */}
+        {/* Kept-alive server views */}
         {renderedServers.map(server => (
           <div
             key={server.id}
             className="absolute inset-0"
-            style={{ display: server.id === activeId ? 'block' : 'none' }}
+            style={{ display: server.id === activeId && !showSettings ? 'block' : 'none' }}
           >
             <ServerView
               server={server}
@@ -114,7 +129,6 @@ function App() {
         ))}
       </div>
 
-      {/* Add Server Dialog */}
       <AddServerDialog
         isOpen={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}

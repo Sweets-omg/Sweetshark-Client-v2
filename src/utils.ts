@@ -15,19 +15,6 @@ export const serverApi = {
   getActiveServer: () => invoke<Server | null>('get_active_server'),
 };
 
-export const generateRandomColor = (): string => {
-  const colors = [
-    '#5865F2', // Blurple
-    '#57F287', // Green
-    '#FEE75C', // Yellow
-    '#EB459E', // Fuchsia
-    '#ED4245', // Red
-    '#F26522', // Orange
-    '#00D9FF', // Cyan
-    '#A855F7', // Purple
-  ];
-  return colors[Math.floor(Math.random() * colors.length)];
-};
 
 export const generateServerId = (): string => {
   return `server_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
