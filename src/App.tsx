@@ -53,6 +53,15 @@ function App() {
 
   const handleServerAdded = () => setRefreshTrigger(prev => prev + 1);
 
+  const handleServerRemoved = (serverId: string) => {
+    // Evict deleted server from the kept-alive pool so its iframe is destroyed
+    setKeptServers(prev => {
+      const next = { ...prev };
+      delete next[serverId];
+      return next;
+    });
+  };
+
   const handleRefreshServer = (serverId: string) => {
     setServerRefreshTrigger(prev => ({
       ...prev,
@@ -77,6 +86,7 @@ function App() {
         onServerSelect={handleServerSelect}
         onAddServer={handleAddServer}
         onRefreshServer={handleRefreshServer}
+        onServerRemoved={handleServerRemoved}
         refreshTrigger={refreshTrigger}
       />
 

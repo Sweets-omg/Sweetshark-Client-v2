@@ -12,7 +12,6 @@ interface AddServerDialogProps {
 export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDialogProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [token, setToken] = useState('');
   const [icon, setIcon] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +66,6 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
         id: generateServerId(),
         name: name.trim(),
         url: cleanUrl,
-        token: token.trim() || undefined,
         color: generateRandomColor(),
         icon: icon || undefined,
         keepLoaded: true, // Default to true
@@ -78,7 +76,6 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
       // Reset form
       setName('');
       setUrl('');
-      setToken('');
       setIcon(null);
       
       onServerAdded();
@@ -94,7 +91,6 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
     if (!isSubmitting) {
       setName('');
       setUrl('');
-      setToken('');
       setIcon(null);
       setError('');
       onClose();
@@ -190,21 +186,6 @@ export function AddServerDialog({ isOpen, onClose, onServerAdded }: AddServerDia
             />
           </div>
 
-          {/* Server Token */}
-          <div>
-            <label htmlFor="token" className="block text-xs font-semibold text-gray-300 uppercase mb-2">
-              Server Token <span className="text-gray-500">(Optional)</span>
-            </label>
-            <input
-              type="password"
-              id="token"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Enter token if required"
-              disabled={isSubmitting}
-              className="w-full bg-[#1e1f22] text-white px-3 py-2 rounded border border-transparent focus:border-[#5865F2] outline-none transition-colors disabled:opacity-50"
-            />
-          </div>
 
           {/* Error message */}
           {error && (

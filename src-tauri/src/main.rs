@@ -11,8 +11,6 @@ struct Server {
     id: String,
     name: String,
     url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    token: Option<String>,
     color: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<String>,

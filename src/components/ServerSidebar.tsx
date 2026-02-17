@@ -11,6 +11,7 @@ interface ServerSidebarProps {
   onServerSelect: (server: Server | null) => void;
   onAddServer: () => void;
   onRefreshServer: (serverId: string) => void;
+  onServerRemoved: (serverId: string) => void;
   refreshTrigger?: number;
 }
 
@@ -21,7 +22,7 @@ interface ContextMenuState {
   server: Server | null;
 }
 
-export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, refreshTrigger }: ServerSidebarProps) {
+export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, onServerRemoved, refreshTrigger }: ServerSidebarProps) {
   const [servers, setServers] = useState<Server[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -159,9 +160,11 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, re
   const handleConfirmRemove = async () => {
     if (!removeDialog.server) return;
     try {
-      await serverApi.deleteServer(removeDialog.server.id);
+      const removedId = removeDialog.server.id;
+      await serverApi.deleteServer(removedId);
       await loadServers();
-      if (activeServerId === removeDialog.server.id) {
+      onServerRemoved(removedId);
+      if (activeServerId === removedId) {
         setActiveServerId(null);
         onServerSelect(null);
       }
