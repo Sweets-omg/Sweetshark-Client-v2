@@ -16,7 +16,7 @@ struct Server {
     color: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "keepLoaded", skip_serializing_if = "Option::is_none")]
     keep_loaded: Option<bool>,
 }
 

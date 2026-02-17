@@ -5,6 +5,7 @@ import { serverApi, cn } from '../utils';
 import { ServerContextMenu } from './ServerContextMenu';
 import { RenameServerDialog } from './RenameServerDialog';
 import { ChangeIconDialog } from './ChangeIconDialog';
+import { RemoveServerDialog } from './RemoveServerDialog';
 
 interface ServerSidebarProps {
   onServerSelect: (server: Server | null) => void;
@@ -34,6 +35,10 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, re
     server: null,
   });
   const [iconDialog, setIconDialog] = useState<{ isOpen: boolean; server: Server | null }>({
+    isOpen: false,
+    server: null,
+  });
+  const [removeDialog, setRemoveDialog] = useState<{ isOpen: boolean; server: Server | null }>({
     isOpen: false,
     server: null,
   });
@@ -89,13 +94,12 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, re
   };
 
   const handleRename = async (newName: string) => {
-    if (!contextMenu.server) return;
+    if (!renameDialog.server) return;
     
     try {
-      const updatedServer = { ...contextMenu.server, name: newName };
+      const updatedServer = { ...renameDialog.server, name: newName };
       await serverApi.updateServer(updatedServer);
       await loadServers();
-      closeContextMenu();
     } catch (error) {
       console.error('Failed to rename server:', error);
     }
@@ -123,37 +127,47 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, re
     if (!contextMenu.server) return;
     
     try {
+      // keepLoaded defaults to true when undefined, so use !== false as current value
+      const currentlyEnabled = contextMenu.server.keepLoaded !== false;
       const updatedServer = {
         ...contextMenu.server,
-        keepLoaded: !contextMenu.server.keepLoaded,
+        keepLoaded: !currentlyEnabled,
       };
       await serverApi.updateServer(updatedServer);
       await loadServers();
-      // Update context menu state to reflect change
+      // Update context menu state to reflect the new value
       setContextMenu(prev => ({
         ...prev,
-        server: prev.server ? { ...prev.server, keepLoaded: !prev.server.keepLoaded } : null
+        server: prev.server ? { ...prev.server, keepLoaded: updatedServer.keepLoaded } : null
       }));
+      // If this is the currently-active server, notify the parent so App.tsx
+      // can immediately add/remove it from the kept-alive pool
+      if (updatedServer.id === activeServerId) {
+        onServerSelect(updatedServer);
+      }
     } catch (error) {
       console.error('Failed to toggle keep loaded:', error);
     }
   };
 
-  const handleRemove = async () => {
+  const handleRemove = () => {
     if (!contextMenu.server) return;
-    
-    if (confirm(`Are you sure you want to remove "${contextMenu.server.name}"?`)) {
-      try {
-        await serverApi.deleteServer(contextMenu.server.id);
-        await loadServers();
-        if (activeServerId === contextMenu.server.id) {
-          setActiveServerId(null);
-          onServerSelect(null);
-        }
-        closeContextMenu();
-      } catch (error) {
-        console.error('Failed to remove server:', error);
+    setRemoveDialog({ isOpen: true, server: contextMenu.server });
+    closeContextMenu();
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!removeDialog.server) return;
+    try {
+      await serverApi.deleteServer(removeDialog.server.id);
+      await loadServers();
+      if (activeServerId === removeDialog.server.id) {
+        setActiveServerId(null);
+        onServerSelect(null);
       }
+      setRemoveDialog({ isOpen: false, server: null });
+    } catch (error) {
+      console.error('Failed to remove server:', error);
     }
   };
 
@@ -292,6 +306,14 @@ export function ServerSidebar({ onServerSelect, onAddServer, onRefreshServer, re
         serverName={iconDialog.server?.name || ''}
         onClose={() => setIconDialog({ isOpen: false, server: null })}
         onChange={handleChangeIcon}
+      />
+
+      {/* Remove Server Dialog */}
+      <RemoveServerDialog
+        isOpen={removeDialog.isOpen}
+        serverName={removeDialog.server?.name || ''}
+        onClose={() => setRemoveDialog({ isOpen: false, server: null })}
+        onConfirm={handleConfirmRemove}
       />
     </>
   );

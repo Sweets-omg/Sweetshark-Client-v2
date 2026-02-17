@@ -43,7 +43,7 @@ export function ServerView({ server, refreshTrigger }: ServerViewProps) {
   };
 
   return (
-    <div className="flex-1 bg-[#313338] relative">
+    <div className="w-full h-full bg-[#313338] relative">
       {/* Loading overlay */}
       {isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#313338] z-10">

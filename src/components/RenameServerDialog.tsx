@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 interface RenameServerDialogProps {
@@ -16,6 +16,14 @@ export function RenameServerDialog({
 }: RenameServerDialogProps) {
   const [name, setName] = useState(currentName);
   const [error, setError] = useState('');
+
+  // Sync name whenever the dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setName(currentName);
+      setError('');
+    }
+  }, [isOpen, currentName]);
 
   if (!isOpen) return null;
 
