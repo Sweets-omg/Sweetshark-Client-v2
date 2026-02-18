@@ -19,6 +19,7 @@
     "core:webview:allow-set-webview-size",
     "dialog:default",
     "fs:default",
-    "store:default"
+    "store:default",
+    "opener:allow-open-url"
   ]
 }
