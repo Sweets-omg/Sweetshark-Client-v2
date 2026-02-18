@@ -1,0 +1,189 @@
+.rsd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+  animation: rsd-overlay-in 0.15s ease;
+}
+
+@keyframes rsd-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.rsd-modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  width: 440px;
+  max-width: calc(100vw - 40px);
+  /* NO overflow:hidden here — it clips the icon that hangs above the band */
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.03);
+  animation: rsd-modal-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes rsd-modal-in {
+  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* Band clips itself, not the whole modal */
+.rsd-band {
+  height: 5px;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 60%, #fff) 50%,
+    var(--accent) 100%
+  );
+  background-size: 200% 100%;
+  animation: rsd-shimmer 2.5s linear infinite;
+}
+
+@keyframes rsd-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position:   0% 0; }
+}
+
+/* Icon floats above the band — no clipping */
+.rsd-preview-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: -28px;
+  padding-bottom: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.rsd-preview-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  border: 3px solid var(--bg-elevated);
+  overflow: hidden;
+  letter-spacing: -0.02em;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.rsd-body {
+  padding: 4px 28px 26px;
+}
+
+.rsd-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.rsd-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 20px;
+  line-height: 1.55;
+}
+
+.rsd-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(237, 66, 69, 0.1);
+  border: 1px solid rgba(237, 66, 69, 0.28);
+  border-radius: 9px;
+  padding: 9px 13px;
+  color: #ed7375;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.rsd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+
+.rsd-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.rsd-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 10px 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rsd-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+
+.rsd-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.rsd-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.rsd-btn-cancel {
+  padding: 10px 18px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rsd-btn-cancel:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.rsd-btn-confirm {
+  padding: 10px 22px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}
+
+.rsd-btn-confirm:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.rsd-btn-confirm:active { transform: translateY(0); }
