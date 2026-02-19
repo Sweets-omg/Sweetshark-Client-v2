@@ -110,7 +110,7 @@ export default function Sidebar({
 
   return (
     <>
-      <nav className="sidebar">
+      <nav className="sidebar" onContextMenu={(e) => e.preventDefault()}>
         <div className="sidebar-top">
           <SidebarBtn
             active={activeView === "home"}

@@ -66,7 +66,7 @@
 
 /* Sharkord link */
 .home-link {
-  color: var(--accent);
+  color: #4d9de0;
   text-decoration: none;
   font-weight: 600;
   transition: color 0.15s, opacity 0.15s;
@@ -87,7 +87,7 @@
 }
 
 .home-link:hover {
-  color: var(--accent-hover, var(--accent));
+  color: #6cb3f0;
   opacity: 0.9;
 }
 

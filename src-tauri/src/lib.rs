@@ -1,6 +1,199 @@
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
 use tauri::webview::WebviewBuilder;
 
+const CONTEXT_MENU_SCRIPT: &str = r#"
+(function () {
+  /* Styles are injected lazily on first _show() call — DO NOT touch the DOM
+     at the top level because initialization_script runs before <head> exists. */
+  var _stylesInjected = false;
+  var _menu = null;
+
+  function _injectStyles() {
+    if (_stylesInjected) return;
+    _stylesInjected = true;
+    var s = document.createElement('style');
+    s.id = '__ss_ctx_styles__';
+    s.textContent =
+      '#__ss_ctx__{position:fixed;z-index:2147483647;background:#1e1e21;' +
+      'border:1px solid #2e2e33;border-radius:9px;padding:4px;min-width:190px;' +
+      'box-shadow:0 8px 32px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.4);' +
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;' +
+      'font-size:13px;color:#d8d8e0;user-select:none;' +
+      'animation:__ss_ctx_in .08s ease}' +
+      '@keyframes __ss_ctx_in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}' +
+      '#__ss_ctx__ .ss-item{display:flex;align-items:center;padding:6px 11px;' +
+      'border-radius:6px;cursor:pointer;white-space:nowrap;gap:9px;transition:background .1s}' +
+      '#__ss_ctx__ .ss-item:hover{background:rgba(255,255,255,.09)}' +
+      '#__ss_ctx__ .ss-item:active{background:rgba(255,255,255,.14)}' +
+      '#__ss_ctx__ .ss-item.ss-disabled{opacity:.35;cursor:default;pointer-events:none}' +
+      '#__ss_ctx__ .ss-sep{height:1px;background:#2e2e33;margin:3px 6px}' +
+      '#__ss_ctx__ .ss-icon{width:16px;height:16px;display:flex;align-items:center;' +
+      'justify-content:center;opacity:.65;flex-shrink:0}' +
+      '#__ss_ctx__ .ss-shortcut{margin-left:auto;font-size:11px;opacity:.35;padding-left:20px}';
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function _remove() {
+    if (_menu) { _menu.remove(); _menu = null; }
+  }
+
+  function _icon(svg) {
+    var s = document.createElement('span');
+    s.className = 'ss-icon';
+    s.innerHTML = svg;
+    return s;
+  }
+
+  var ICONS = {
+    save:      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    copy:      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+    cut:       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="20" r="2"/><circle cx="6" cy="4" r="2"/><line x1="14.5" y1="14.5" x2="6" y2="18"/><line x1="6" y1="6" x2="14.5" y2="9.5"/><polyline points="21 3 16 8 21 13"/></svg>',
+    paste:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+    selectall: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>',
+    link:      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+    open:      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+    img:       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+  };
+
+  function _show(items, x, y) {
+    _remove();
+    if (!items.length) return;
+    _injectStyles();
+
+    _menu = document.createElement('div');
+    _menu.id = '__ss_ctx__';
+
+    items.forEach(function(item) {
+      if (item === 'sep') {
+        var s = document.createElement('div');
+        s.className = 'ss-sep';
+        _menu.appendChild(s);
+      } else {
+        var el = document.createElement('div');
+        el.className = 'ss-item' + (item.disabled ? ' ss-disabled' : '');
+        el.appendChild(_icon(ICONS[item.icon] || ''));
+        var lbl = document.createElement('span');
+        lbl.textContent = item.label;
+        el.appendChild(lbl);
+        if (item.shortcut) {
+          var sc = document.createElement('span');
+          sc.className = 'ss-shortcut';
+          sc.textContent = item.shortcut;
+          el.appendChild(sc);
+        }
+        el.addEventListener('mousedown', function(ev) { ev.stopPropagation(); });
+        if (!item.disabled) {
+          el.addEventListener('click', function() { item.action(); _remove(); });
+        }
+        _menu.appendChild(el);
+      }
+    });
+
+    (document.body || document.documentElement).appendChild(_menu);
+
+    var mw = _menu.offsetWidth, mh = _menu.offsetHeight;
+    var left = (x + mw > window.innerWidth)  ? x - mw : x;
+    var top  = (y + mh > window.innerHeight) ? y - mh : y;
+    _menu.style.left = Math.max(0, left) + 'px';
+    _menu.style.top  = Math.max(0, top)  + 'px';
+  }
+
+  function _handle(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    var t = e.target;
+    var items = [];
+
+    /* Input / Textarea */
+    var isInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
+    var ceEl    = !isInput && t.closest && t.closest('[contenteditable="true"]');
+    var isCE    = !isInput && (t.isContentEditable || !!ceEl);
+
+    if (isInput || isCE) {
+      var isEditable = isInput ? (!t.readOnly && !t.disabled) : true;
+      var hasSelection = false;
+      if (isInput) {
+        hasSelection = typeof t.selectionStart === 'number' && t.selectionStart !== t.selectionEnd;
+      } else {
+        var ws = window.getSelection();
+        hasSelection = ws && ws.toString().trim().length > 0;
+      }
+
+      if (hasSelection && isEditable) {
+        items.push({ icon: 'cut', label: 'Cut', shortcut: 'Ctrl+X', action: function() { document.execCommand('cut'); }});
+      }
+      if (hasSelection) {
+        items.push({ icon: 'copy', label: 'Copy', shortcut: 'Ctrl+C', action: function() { document.execCommand('copy'); }});
+      }
+      if (isEditable) {
+        items.push({ icon: 'paste', label: 'Paste', shortcut: 'Ctrl+V', action: function() {
+          navigator.clipboard.readText().then(function(text) {
+            document.execCommand('insertText', false, text);
+          }).catch(function() { document.execCommand('paste'); });
+        }});
+      }
+      if (items.length) items.push('sep');
+      items.push({ icon: 'selectall', label: 'Select All', shortcut: 'Ctrl+A', action: function() {
+        if (isInput) { t.select(); } else { document.execCommand('selectAll'); }
+      }});
+
+      _show(items, e.clientX, e.clientY);
+      return;
+    }
+
+    /* Image */
+    var img = (t.tagName === 'IMG') ? t : (t.closest ? t.closest('img') : null);
+    if (img && img.src) {
+      items.push({ icon: 'save', label: 'Save Image As\u2026', action: function() {
+        var a = document.createElement('a');
+        a.href = img.src;
+        a.download = img.src.split('/').pop().split('?')[0] || 'image';
+        document.body.appendChild(a); a.click(); a.remove();
+      }});
+      items.push({ icon: 'copy', label: 'Copy Image Address', action: function() {
+        navigator.clipboard.writeText(img.src).catch(function(){});
+      }});
+    }
+
+    /* Link */
+    var anchor = (t.tagName === 'A') ? t : (t.closest ? t.closest('a') : null);
+    if (anchor && anchor.href) {
+      if (items.length) items.push('sep');
+      items.push({ icon: 'open', label: 'Open Link', action: function() { window.open(anchor.href, '_blank'); }});
+      items.push({ icon: 'link', label: 'Copy Link Address', action: function() {
+        navigator.clipboard.writeText(anchor.href).catch(function(){});
+      }});
+    }
+
+    /* Text selection */
+    var sel = window.getSelection && window.getSelection();
+    if (sel && sel.toString().trim().length > 0) {
+      var selText = sel.toString();
+      if (items.length) items.push('sep');
+      items.push({ icon: 'copy', label: 'Copy', shortcut: 'Ctrl+C', action: function() {
+        navigator.clipboard.writeText(selText).catch(function(){});
+      }});
+    }
+
+    _show(items, e.clientX, e.clientY);
+  }
+
+  document.addEventListener('contextmenu', _handle, true);
+  document.oncontextmenu = function(e) { e.preventDefault(); return false; };
+
+  document.addEventListener('mousedown', function(e) {
+    if (_menu && !_menu.contains(e.target)) _remove();
+  }, true);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') _remove();
+  });
+  window.addEventListener('scroll', _remove, { passive: true, capture: true });
+})();
+"#;
+
+
 fn uuid_to_bytes(uuid_str: &str) -> [u8; 16] {
     let hex: String = uuid_str.chars().filter(|c| *c != '-').collect();
     let mut bytes = [0u8; 16];
@@ -48,7 +241,8 @@ async fn create_server_webview(
         .ok_or_else(|| "Main window not found".to_string())?;
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
-        .data_directory(data_dir);
+        .data_directory(data_dir)
+        .initialization_script(CONTEXT_MENU_SCRIPT);
 
     // data_store_identifier adds WebView2-level environment isolation on Windows,
     // on top of the separate data_directory above.
@@ -57,13 +251,47 @@ async fn create_server_webview(
         builder = builder.data_store_identifier(uuid_to_bytes(&server_id));
     }
 
-    window
+    let wv = window
         .add_child(
             builder,
             LogicalPosition::new(x, y),
             LogicalSize::new(width, height),
         )
         .map_err(|e: tauri::Error| e.to_string())?;
+
+    // On Windows: disable the native WebView2 context menu entirely at the OS
+    // level via ICoreWebView2Settings. This is the only reliable way to prevent
+    // the native edit/image/inspect menus from appearing alongside our custom JS
+    // menu.  Our initialization_script still shows the custom JS menu because
+    // the JS `contextmenu` event fires independently of AreDefaultContextMenusEnabled.
+    // We also disable DevTools (F12 / Ctrl+Shift+I) since this is a production client.
+    #[cfg(windows)]
+    {
+        let wv_clone = wv.clone();
+        // spawn_blocking so we don't deadlock the async command's thread —
+        // with_webview dispatches the closure to the main thread synchronously.
+        tauri::async_runtime::spawn(async move {
+            wv_clone.with_webview(|webview| {
+                unsafe {
+                    // Settings() already returns ICoreWebView2Settings — no cast needed
+                    let settings = webview
+                        .controller()
+                        .CoreWebView2()
+                        .expect("get CoreWebView2")
+                        .Settings()
+                        .expect("get ICoreWebView2Settings");
+
+                    // webview2-com 0.38 wraps these methods to take plain Rust bool
+                    settings
+                        .SetAreDefaultContextMenusEnabled(false)
+                        .expect("SetAreDefaultContextMenusEnabled");
+                    settings
+                        .SetAreDevToolsEnabled(false)
+                        .expect("SetAreDevToolsEnabled");
+                }
+            }).ok();
+        });
+    }
 
     Ok(())
 }

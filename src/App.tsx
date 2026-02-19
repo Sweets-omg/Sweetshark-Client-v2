@@ -275,6 +275,7 @@ export default function App() {
 
         <main
           className="main-content"
+          onContextMenu={(e) => e.preventDefault()}
           style={{ visibility: IS_TAURI && isServerActive ? "hidden" : "visible" }}
         >
           {activeView === "home" && <HomePage />}
