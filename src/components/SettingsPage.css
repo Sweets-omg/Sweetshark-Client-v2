@@ -367,3 +367,65 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ── PTT toggle ──────────────────────────────────────────────────────────── */
+.ptt-toggle {
+  width: 40px;
+  height: 22px;
+  border-radius: 99px;
+  background: var(--bg-hover);
+  border: 1.5px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  flex-shrink: 0;
+}
+
+.ptt-toggle--on {
+  background: var(--toggle-on);
+  border-color: var(--toggle-on);
+}
+
+.ptt-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s;
+  pointer-events: none;
+}
+
+.ptt-toggle--on .ptt-toggle-knob {
+  transform: translateX(18px);
+}
+
+/* ── PTT key chips in settings row ──────────────────────────────────────── */
+.ptt-keychips {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.ptt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 1px 0 var(--border-subtle);
+}
+
+.ptt-chip-plus {
+  font-size: 10px;
+  color: var(--text-muted);
+}

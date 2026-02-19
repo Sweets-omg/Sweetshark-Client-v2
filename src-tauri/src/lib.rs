@@ -1,5 +1,6 @@
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl};
 use tauri::webview::WebviewBuilder;
+use std::sync::{Arc, Mutex};
 
 const CONTEXT_MENU_SCRIPT: &str = r#"
 (function () {
@@ -343,8 +344,61 @@ async fn create_server_webview(
         speaker_json = serde_json::to_string(speaker_js).unwrap_or_default(),
     );
 
+
+    // PTT mute/unmute script — injected into every server webview.
+    // Listens for Tauri "ptt://pressed" / "ptt://released" events and
+    // mutes/unmutes all live audio tracks obtained via getUserMedia.
+    const PTT_SCRIPT: &str = r#"
+(function() {
+  // Track all live audio tracks so we can mute/unmute them
+  var _audioTracks = [];
+
+  // Patch getUserMedia to intercept audio tracks
+  var _gumOrig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  // We wrap the ALREADY-patched getUserMedia (device filter) from the device script.
+  // By using a MutationObserver trick we ensure we run after it.
+  // Actually we just patch at DOMContentLoaded time so both scripts are applied.
+  function _patchGum() {
+    var _prev = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = function(constraints) {
+      return _prev(constraints).then(function(stream) {
+        stream.getAudioTracks().forEach(function(track) {
+          _audioTracks.push(track);
+          track.addEventListener('ended', function() {
+            _audioTracks = _audioTracks.filter(function(t) { return t !== track; });
+          });
+        });
+        return stream;
+      });
+    };
+  }
+  _patchGum();
+
+  function _setMuted(muted) {
+    _audioTracks.forEach(function(t) {
+      try { t.enabled = !muted; } catch(e) {}
+    });
+    // Also mute/unmute any <audio>/<video> elements' srcObject tracks
+    document.querySelectorAll('audio, video').forEach(function(el) {
+      if (el.srcObject && el.srcObject.getAudioTracks) {
+        el.srcObject.getAudioTracks().forEach(function(t) {
+          try { t.enabled = !muted; } catch(e) {}
+        });
+      }
+    });
+  }
+
+  // Listen for PTT events from the Tauri backend via window.__TAURI_INTERNALS__
+  if (window.__TAURI_INTERNALS__) {
+    window.__TAURI__.event.listen('ptt://pressed',  function() { _setMuted(false); });
+    window.__TAURI__.event.listen('ptt://released', function() { _setMuted(true);  });
+  }
+})();
+"#;
+
     let combined_init = format!("{CONTEXT_MENU_SCRIPT}
-{device_script}");
+{device_script}
+{PTT_SCRIPT}");
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
         .data_directory(data_dir)
@@ -443,14 +497,279 @@ async fn open_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+
+// ── Push-to-talk ─────────────────────────────────────────────────────────────
+//
+// Uses GetAsyncKeyState polling on a dedicated thread so that PTT works
+// regardless of which window has focus — including when the Tauri/WebView2
+// window itself is focused.
+//
+// WH_KEYBOARD_LL was tried first but WebView2 consumes keyboard events before
+// they reach a low-level hook's message pump when the webview has focus.
+// GetAsyncKeyState reads key state directly from the keyboard driver and is
+// completely unaffected by focus or message routing.
+//
+// Mouse buttons (right, middle, XButton1/2) also have real Win32 VK codes
+// that GetAsyncKeyState understands, so we use one unified approach for
+// everything — no hooks, no message loop, no unsafe pointer juggling.
+//
+// Poll interval: 5 ms  (~200 Hz) — imperceptible latency for PTT.
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct PttConfig {
+    pub enabled: bool,
+    /// Normalised key tokens sent from the frontend, e.g. ["alt", "mouse4"]
+    pub keys: Vec<String>,
+}
+
+pub struct PttState {
+    pub config: PttConfig,
+    /// Send () here to stop the current poll thread.
+    pub stop_tx: Option<std::sync::mpsc::Sender<()>>,
+}
+
+type SharedPttState = Arc<Mutex<PttState>>;
+
+#[tauri::command]
+fn get_ptt_config(state: tauri::State<SharedPttState>) -> PttConfig {
+    state.lock().unwrap().config.clone()
+}
+
+/// Convert a frontend key token to a Win32 virtual-key code.
+///
+/// Accepts browser KeyboardEvent.code style ("ShiftLeft", "AltLeft"),
+/// common short names ("shift", "alt", "mouse4"), and single characters.
+/// Case-insensitive.
+///
+/// Mouse buttons map to their real Win32 VK codes:
+///   VK_RBUTTON  = 0x02  (right)
+///   VK_MBUTTON  = 0x04  (middle / mouse3)
+///   VK_XBUTTON1 = 0x05  (mouse4 / side-back)
+///   VK_XBUTTON2 = 0x06  (mouse5 / side-forward)
+#[cfg(windows)]
+fn token_to_vk(token: &str) -> Option<u32> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+    let t = token.to_ascii_lowercase();
+    let t = t.trim();
+    Some(match t {
+        // ── Ctrl ──────────────────────────────────────────────────────────────
+        "ctrl" | "control" | "lctrl" | "lcontrol" | "controlleft" => VK_LCONTROL as u32,
+        "rctrl" | "rcontrol" | "controlright"                      => VK_RCONTROL as u32,
+        // ── Shift ─────────────────────────────────────────────────────────────
+        "shift" | "lshift" | "shiftleft"                           => VK_LSHIFT as u32,
+        "rshift" | "shiftright"                                    => VK_RSHIFT as u32,
+        // ── Alt ───────────────────────────────────────────────────────────────
+        "alt" | "lalt" | "lmenu" | "altleft" | "menu"             => VK_LMENU as u32,
+        "ralt" | "rmenu" | "altright" | "altgr"                    => VK_RMENU as u32,
+        // ── Win / Super ───────────────────────────────────────────────────────
+        "super" | "meta" | "win" | "metaleft" | "osleft"           => VK_LWIN as u32,
+        "metaright" | "osright"                                    => VK_RWIN as u32,
+        // ── Common keys ───────────────────────────────────────────────────────
+        "space"                                                    => VK_SPACE as u32,
+        "enter" | "return" | "numpadenter"                         => VK_RETURN as u32,
+        "escape" | "esc"                                           => VK_ESCAPE as u32,
+        "backspace"                                                => VK_BACK as u32,
+        "tab"                                                      => VK_TAB as u32,
+        "delete" | "del"                                           => VK_DELETE as u32,
+        "insert" | "ins"                                           => VK_INSERT as u32,
+        "home"                                                     => VK_HOME as u32,
+        "end"                                                      => VK_END as u32,
+        "pageup"                                                   => VK_PRIOR as u32,
+        "pagedown"                                                 => VK_NEXT as u32,
+        "arrowup"    | "up"                                        => VK_UP as u32,
+        "arrowdown"  | "down"                                      => VK_DOWN as u32,
+        "arrowleft"  | "left"                                      => VK_LEFT as u32,
+        "arrowright" | "right"                                     => VK_RIGHT as u32,
+        "capslock"                                                 => VK_CAPITAL as u32,
+        // ── Function keys ─────────────────────────────────────────────────────
+        "f1"  => VK_F1  as u32, "f2"  => VK_F2  as u32,
+        "f3"  => VK_F3  as u32, "f4"  => VK_F4  as u32,
+        "f5"  => VK_F5  as u32, "f6"  => VK_F6  as u32,
+        "f7"  => VK_F7  as u32, "f8"  => VK_F8  as u32,
+        "f9"  => VK_F9  as u32, "f10" => VK_F10 as u32,
+        "f11" => VK_F11 as u32, "f12" => VK_F12 as u32,
+        // ── Misc ──────────────────────────────────────────────────────────────
+        "print" | "printscreen"                                    => VK_SNAPSHOT as u32,
+        "scrolllock"                                               => VK_SCROLL as u32,
+        "pause"                                                    => VK_PAUSE as u32,
+        "numlock"                                                  => VK_NUMLOCK as u32,
+        // ── Mouse buttons (real Win32 VK codes) ───────────────────────────────
+        "mouse2" | "mouseright"  | "rightbutton"                   => VK_RBUTTON  as u32,
+        "mouse3" | "mousemiddle" | "middlebutton"                  => VK_MBUTTON  as u32,
+        "mouse4" | "xbutton1"                                      => VK_XBUTTON1 as u32,
+        "mouse5" | "xbutton2"                                      => VK_XBUTTON2 as u32,
+        // ── Single-character fallback via VkKeyScanW ──────────────────────────
+        other => {
+            let chars: Vec<char> = other.chars().collect();
+            if chars.len() == 1 {
+                let scan = unsafe {
+                    windows_sys::Win32::UI::Input::KeyboardAndMouse::VkKeyScanW(chars[0] as u16)
+                };
+                if scan != -1i16 {
+                    (scan & 0xFF) as u32
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+    })
+}
+
+#[cfg(not(windows))]
+fn token_to_vk(_token: &str) -> Option<u32> { None }
+
+/// Spawn a dedicated poll thread that watches ONLY the exact VK codes in
+/// `vk_set` — nothing else is ever read.
+///
+/// Privacy guarantee:
+///   • This thread is started ONLY when PTT is enabled by the user.
+///   • It calls GetAsyncKeyState for the assigned key(s) only — no other
+///     keys, no text, no clipboard, no window titles.
+///   • Sending () on the returned channel stops the thread immediately.
+///     The thread is also the only thing that owns the VK list; when it
+///     exits the list is dropped and no key state is ever read again.
+///   • No data leaves the process: the only output is a boolean
+///     "ptt://pressed" / "ptt://released" Tauri event.
+#[cfg(windows)]
+fn start_ptt_hook(
+    app: AppHandle,
+    vk_set: Vec<u32>,
+) -> std::sync::mpsc::Sender<()> {
+    use std::sync::mpsc;
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    // Move the VK list into the thread — nothing outside the thread can
+    // access it once we hand it over.
+    let vks: Vec<i32> = vk_set.into_iter().map(|v| v as i32).collect();
+
+    std::thread::Builder::new()
+        // Named so it's identifiable in debuggers / task managers.
+        .name("sweetshark-ptt-poll".into())
+        .spawn(move || {
+            let mut was_active = false;
+
+            loop {
+                // Exit as soon as the stop signal arrives.
+                if stop_rx.try_recv().is_ok() {
+                    if was_active {
+                        let _ = app.emit("ptt://released", ());
+                    }
+                    // vks is dropped here — no key state is read after this point.
+                    break;
+                }
+
+                // GetAsyncKeyState reads raw hardware key state.
+                // We call it ONLY for the keys in vks — the user-assigned PTT
+                // keys — and we do nothing with the result except check whether
+                // ALL of them are simultaneously held (bit 15 set = down).
+                // No keystroke data is stored, logged, or transmitted.
+                let all_down = vks.iter().all(|&vk| {
+                    (unsafe {
+                        windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState(vk)
+                    } as u16) & 0x8000 != 0
+                });
+
+                if all_down && !was_active {
+                    was_active = true;
+                    let _ = app.emit("ptt://pressed", ());
+                } else if !all_down && was_active {
+                    was_active = false;
+                    let _ = app.emit("ptt://released", ());
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        })
+        .expect("failed to spawn PTT poll thread");
+
+    stop_tx
+}
+
+#[cfg(not(windows))]
+fn start_ptt_hook(
+    _app: AppHandle,
+    _vk_set: Vec<u32>,
+) -> std::sync::mpsc::Sender<()> {
+    let (tx, _rx) = std::sync::mpsc::channel();
+    tx
+}
+
+/// Enable or disable PTT.
+///
+/// When `enabled` is false (or `keys` is empty) any running poll thread is
+/// stopped immediately and no key state is read until the user explicitly
+/// re-enables PTT. This is the sole entry-point that controls whether the
+/// poll thread exists at all.
+#[tauri::command]
+async fn set_ptt_config(
+    app: AppHandle,
+    state: tauri::State<'_, SharedPttState>,
+    keys: Vec<String>,
+    enabled: bool,
+) -> Result<(), String> {
+    // Always stop the existing thread first — whether we're disabling, changing
+    // keys, or re-enabling. This guarantees only one poll thread ever exists.
+    {
+        let mut locked = state.lock().unwrap();
+        if let Some(tx) = locked.stop_tx.take() {
+            let _ = tx.send(());
+            // stop_tx is now None — thread will exit on its next iteration.
+        }
+        locked.config.keys    = keys.clone();
+        locked.config.enabled = enabled;
+    }
+
+    // Only start a new thread when PTT is explicitly enabled with a valid keybind.
+    // If disabled or no keys are set, nothing runs — no key state is ever polled.
+    if enabled && !keys.is_empty() {
+        let vk_set: Vec<u32> = keys.iter()
+            .filter_map(|k| token_to_vk(k))
+            .collect();
+
+        if vk_set.is_empty() {
+            return Err(format!("No recognisable keys in: {:?}", keys));
+        }
+
+        let stop_tx = start_ptt_hook(app, vk_set);
+        state.lock().unwrap().stop_tx = Some(stop_tx);
+    }
+
+    Ok(())
+}
+
+/// Returns true if the PTT poll thread is currently running.
+/// The frontend can expose this to users as proof that no key polling
+/// is happening when PTT is disabled.
+#[tauri::command]
+fn get_ptt_active(state: tauri::State<'_, SharedPttState>) -> bool {
+    state.lock().unwrap().stop_tx.is_some()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let ptt_state: SharedPttState = Arc::new(Mutex::new(PttState {
+        config: PttConfig::default(),
+        stop_tx: None,
+    }));
+
     tauri::Builder::default()
+        .manage(ptt_state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_url, create_server_webview, reload_server_webview])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            open_url,
+            create_server_webview,
+            reload_server_webview,
+            get_ptt_config,
+            set_ptt_config,
+            get_ptt_active,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
 }

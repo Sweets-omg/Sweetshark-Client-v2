@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import PttKeybindDialog from "./PttKeybindDialog";
 import "./SettingsPage.css";
 
 const IS_TAURI = typeof (window as any).__TAURI_INTERNALS__ !== "undefined";
@@ -73,6 +74,47 @@ async function saveDevicePrefs(prefs: DevicePrefs) {
   if (!IS_TAURI) return;
   try { const store = await getStore(); await store.set("devicePreferences", prefs); }
   catch (e) { console.error("Failed to save device prefs:", e); }
+}
+
+
+// ── Push-to-talk config ────────────────────────────────────────────────────────
+
+export interface PttConfig {
+  enabled: boolean;
+  keys: string[];        // browser key names, e.g. ["Control", "Space"]
+  tauriKeys: string[];   // tauri shortcut tokens, e.g. ["ctrl", "space"]
+}
+
+const PTT_DEFAULT: PttConfig = { enabled: false, keys: [], tauriKeys: [] };
+
+async function loadPttConfig(): Promise<PttConfig> {
+  if (!IS_TAURI) return PTT_DEFAULT;
+  try { const store = await getStore(); return (await store.get<PttConfig>("pttConfig")) ?? PTT_DEFAULT; }
+  catch { return PTT_DEFAULT; }
+}
+
+async function savePttConfig(cfg: PttConfig) {
+  if (!IS_TAURI) return;
+  try { const store = await getStore(); await store.set("pttConfig", cfg); }
+  catch (e) { console.error("Failed to save PTT config:", e); }
+}
+
+async function applyPttConfig(cfg: PttConfig) {
+  if (!IS_TAURI) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("set_ptt_config", { keys: cfg.tauriKeys, enabled: cfg.enabled });
+  } catch (e) { console.error("Failed to apply PTT config:", e); }
+}
+
+// Display helpers (same mapping as PttKeybindDialog)
+const KEY_DISPLAY_MAP: Record<string, string> = {
+  Control: "Ctrl", Meta: "⌘",
+  ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→",
+  " ": "Space", Escape: "Esc", Delete: "Del",
+};
+function displayKey(k: string): string {
+  return KEY_DISPLAY_MAP[k] ?? (k.length === 1 ? k.toUpperCase() : k);
 }
 
 async function enumerateByKind(kind: MediaDeviceKind): Promise<MediaDeviceInfo[]> {
@@ -189,9 +231,10 @@ function DeviceSelect({ label, description, devices, selectedId, permStatus, onC
 
 interface SettingsPageProps {
   onDevicePrefsChange?: (prefs: DevicePrefs) => void;
+  onPttEnabledChange?: (enabled: boolean) => void;
 }
 
-export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps) {
+export default function SettingsPage({ onDevicePrefsChange, onPttEnabledChange }: SettingsPageProps) {
   const [settings,      setSettings]      = useState<AppearanceSettings>(DEFAULTS);
   const [loaded,        setLoaded]        = useState(false);
   const [micPerm,       setMicPerm]       = useState<PermStatus>("unknown");
@@ -201,6 +244,8 @@ export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps)
   const [camDevices,     setCamDevices]     = useState<MediaDeviceInfo[]>([]);
   const [speakerDevices, setSpeakerDevices] = useState<MediaDeviceInfo[]>([]);
   const [devicePrefs,    setDevicePrefs]    = useState<DevicePrefs>({});
+  const [pttConfig,      setPttConfig]      = useState<PttConfig>(PTT_DEFAULT);
+  const [showPttDialog,  setShowPttDialog]  = useState(false);
 
   const refreshDevices = useCallback(async () => {
     const [mics, cams, speakers] = await Promise.all([
@@ -215,17 +260,24 @@ export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps)
 
   useEffect(() => {
     (async () => {
-      const [appearance, prefs, mic, cam] = await Promise.all([
+      const [appearance, prefs, mic, cam, ptt] = await Promise.all([
         loadAppearance(),
         loadDevicePrefs(),
         queryPermStatus("microphone"),
         queryPermStatus("camera"),
+        loadPttConfig(),
       ]);
       setSettings(appearance);
       applySettings(appearance);
       setDevicePrefs(prefs);
       setMicPerm(mic);
       setCamPerm(cam);
+      setPttConfig(ptt);
+      // Re-register PTT shortcut on startup (in case app was restarted)
+      if (ptt.enabled && ptt.tauriKeys.length > 0) {
+        applyPttConfig(ptt);
+        onPttEnabledChange?.(true);
+      }
       setLoaded(true);
       if (mic === "granted" || cam === "granted") await refreshDevices();
     })();
@@ -264,6 +316,7 @@ export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps)
   if (!loaded) return null;
 
   return (
+    <>
     <div className="settings-page">
       <div className="settings-header">
         <h1 className="settings-title">Settings</h1>
@@ -271,6 +324,59 @@ export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps)
       </div>
 
       <div className="settings-body">
+
+        {/* Push to Talk */}
+        <div className="settings-section">
+          <div className="settings-section-header">
+            <span className="settings-section-label">PUSH TO TALK</span>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Push to Talk</span>
+              <span className="settings-row-desc">Hold your key to unmute — mic is muted otherwise</span>
+            </div>
+            <div className="settings-row-controls">
+              <button
+                className={`ptt-toggle ${pttConfig.enabled ? "ptt-toggle--on" : ""}`}
+                onClick={() => {
+                  const next = { ...pttConfig, enabled: !pttConfig.enabled };
+                  setPttConfig(next);
+                  savePttConfig(next);
+                  applyPttConfig(next);
+                  onPttEnabledChange?.(next.enabled);
+                }}
+              >
+                <span className="ptt-toggle-knob" />
+              </button>
+              <span className={`sp-badge ${pttConfig.enabled ? "sp-badge--granted" : "sp-badge--prompt"}`}>
+                {pttConfig.enabled ? "On" : "Off"}
+              </span>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Keybind</span>
+              <span className="settings-row-desc">Key or combo to hold while speaking</span>
+            </div>
+            <div className="settings-row-controls">
+              {pttConfig.keys.length === 0 ? (
+                <span className="sp-badge sp-badge--prompt">Not set</span>
+              ) : (
+                <div className="ptt-keychips">
+                  {pttConfig.keys.map((k, i) => (
+                    <span key={k} className="ptt-chip">
+                      {displayKey(k)}
+                      {i < pttConfig.keys.length - 1 && <span className="ptt-chip-plus">+</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <button className="sp-request-btn" onClick={() => setShowPttDialog(true)}>
+                Edit
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Devices */}
         <div className="settings-section">
@@ -368,5 +474,20 @@ export default function SettingsPage({ onDevicePrefsChange }: SettingsPageProps)
 
       </div>
     </div>
+
+    {showPttDialog && (
+      <PttKeybindDialog
+        currentKeys={pttConfig.keys}
+        onDone={(keys, tauriKeys) => {
+          const next = { ...pttConfig, keys, tauriKeys };
+          setPttConfig(next);
+          savePttConfig(next);
+          if (next.enabled) applyPttConfig(next);
+          setShowPttDialog(false);
+        }}
+        onCancel={() => setShowPttDialog(false)}
+      />
+    )}
+    </>
   );
 }

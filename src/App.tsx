@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import "./App.css";
 import iconSrc from "./assets/icon.png";
-import Sidebar from "./components/Sidebar";
+import Sidebar, { type PttIndicatorState } from "./components/Sidebar";
 import TitleBar from "./components/TitleBar";
 import HomePage from "./components/HomePage";
 import SettingsPage from "./components/SettingsPage";
@@ -54,6 +54,7 @@ export default function App() {
   const [iconChangeTarget, setIconChangeTarget] = useState<Server | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Server | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pttState,    setPttState]    = useState<PttIndicatorState>("off");
   const [isStoreLoaded, setIsStoreLoaded] = useState(false);
 
   // Tracks which server IDs already have a live webview in the pool.
@@ -113,6 +114,32 @@ export default function App() {
     const onResize = () => resizeAllServerWebviews().catch(console.error);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // ── PTT: listen for pressed/released events from Rust ────────────────────
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let unlistenPressed: (() => void) | null = null;
+    let unlistenReleased: (() => void) | null = null;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlistenPressed  = await listen("ptt://pressed",  () => setPttState("active"));
+      unlistenReleased = await listen("ptt://released", () => {
+        // Check if PTT is still enabled (state might have changed)
+        setPttState(s => s !== "off" ? "muted" : "off");
+      });
+    })();
+    return () => {
+      unlistenPressed?.();
+      unlistenReleased?.();
+    };
+  }, []);
+
+  // ── PTT: update indicator state when ptt config changes ──────────────────
+  // SettingsPage manages PTT registration; we just need to keep the indicator
+  // in sync. We expose a callback that App.tsx sets the right base state on.
+  const handlePttEnabledChange = useCallback((enabled: boolean) => {
+    setPttState(enabled ? "muted" : "off");
   }, []);
 
   // ── Webview visibility: show active server webview, hide all others ────────
@@ -321,6 +348,7 @@ export default function App() {
           onChangeServerIcon={openIconChangeDialog}
           onToggleKeepLoaded={toggleKeepLoaded}
           onContextMenuOpenChange={(open) => open ? openModal() : closeModal()}
+          pttState={pttState}
         />
 
         <main
@@ -329,7 +357,7 @@ export default function App() {
           style={{ visibility: IS_TAURI && isServerActive ? "hidden" : "visible" }}
         >
           {activeView === "home" && <HomePage />}
-          {activeView === "settings" && <SettingsPage onDevicePrefsChange={handleDevicePrefsChange} />}
+          {activeView === "settings" && <SettingsPage onDevicePrefsChange={handleDevicePrefsChange} onPttEnabledChange={handlePttEnabledChange} />}
           {isServerActive && activeServer && (
             <ServerLoadingPage server={activeServer} onRemove={openRemoveDialog} />
           )}

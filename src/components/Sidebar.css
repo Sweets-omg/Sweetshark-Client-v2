@@ -123,3 +123,32 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* PTT mic indicator */
+.ptt-indicator {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 3px 0;
+  transition: background 0.15s, color 0.15s;
+  cursor: default;
+}
+
+.ptt-indicator--muted {
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.05);
+}
+
+.ptt-indicator--active {
+  color: #57f287;
+  background: rgba(87, 242, 135, 0.15);
+  animation: ptt-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ptt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(87, 242, 135, 0.35); }
+  50%       { box-shadow: 0 0 0 6px rgba(87, 242, 135, 0); }
+}
