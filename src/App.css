@@ -14,9 +14,11 @@
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   background: var(--window-bg);
+  position: relative;
 }

@@ -1,0 +1,215 @@
+.pd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+  animation: pd-overlay-in 0.15s ease;
+}
+
+@keyframes pd-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pd-modal {
+  width: 480px;
+  max-width: calc(100vw - 40px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 80px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(255,255,255,0.03);
+  animation: pd-modal-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes pd-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+.pd-band {
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 60%, #fff) 50%,
+    var(--accent) 100%
+  );
+  background-size: 200% 100%;
+  animation: pd-band-shimmer 2.5s linear infinite;
+}
+
+@keyframes pd-band-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.pd-body {
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ── Header ── */
+.pd-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.pd-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.pd-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.pd-subtitle strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Permission list ── */
+.pd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.pd-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pd-item:last-child {
+  border-bottom: none;
+}
+
+.pd-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.pd-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pd-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pd-item-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Badges ── */
+.perm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.perm-badge--granted {
+  background: rgba(59, 165, 92, 0.18);
+  color: #57f287;
+}
+
+.perm-badge--denied {
+  background: rgba(237, 66, 69, 0.18);
+  color: #ff5c5e;
+}
+
+.perm-badge--requesting {
+  background: rgba(250, 166, 26, 0.18);
+  color: #faa61a;
+}
+
+.perm-badge--info {
+  background: rgba(160, 160, 180, 0.12);
+  color: var(--text-muted);
+}
+
+/* ── Actions ── */
+.pd-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.pd-btn {
+  padding: 9px 20px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.1s;
+  border: none;
+}
+
+.pd-btn:active { transform: scale(0.97); }
+
+.pd-btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pd-btn--primary:hover:not(:disabled) { opacity: 0.88; }
+.pd-btn--primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pd-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.pd-btn--ghost:hover { background: rgba(255,255,255,0.05); }

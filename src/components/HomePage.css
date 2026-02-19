@@ -2,7 +2,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   padding: 40px;
   animation: fadeIn 0.25s ease;
 }

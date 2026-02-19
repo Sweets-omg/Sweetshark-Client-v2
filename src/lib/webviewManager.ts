@@ -33,7 +33,13 @@ async function contentBounds() {
   };
 }
 
-export async function createServerWebview(serverId: string, url: string): Promise<Webview> {
+export interface DevicePrefs {
+  micId?: string;
+  camId?: string;
+  speakerId?: string;
+}
+
+export async function createServerWebview(serverId: string, url: string, devicePrefs?: DevicePrefs): Promise<Webview> {
   const lbl = webviewLabel(serverId);
 
   if (pool.has(serverId)) {
@@ -51,6 +57,9 @@ export async function createServerWebview(serverId: string, url: string): Promis
     y:        bounds.y,
     width:    bounds.width,
     height:   bounds.height,
+    micId:      devicePrefs?.micId     ?? null,
+    camId:      devicePrefs?.camId     ?? null,
+    speakerId:  devicePrefs?.speakerId ?? null,
   });
 
   // getByLabel is ASYNC — it queries the Tauri backend to find the webview.
@@ -113,4 +122,15 @@ export async function resizeAllServerWebviews(): Promise<void> {
       await wv.setSize(new LogicalSize(bounds.width, bounds.height));
     } catch (_) {}
   }
+}
+
+export async function updateServerWebviewDevices(
+  serverId: string,
+  url: string,
+  devicePrefs: DevicePrefs
+): Promise<void> {
+  // Recreate the webview so the new initialization_script (with updated device
+  // IDs) fires on the next page load. createServerWebview handles closing the
+  // old one and re-adding it to the pool.
+  await createServerWebview(serverId, url, devicePrefs);
 }

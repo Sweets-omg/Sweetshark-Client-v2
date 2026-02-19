@@ -214,6 +214,9 @@ async fn create_server_webview(
     y: f64,
     width: f64,
     height: f64,
+    mic_id: Option<String>,
+    cam_id: Option<String>,
+    speaker_id: Option<String>,
 ) -> Result<(), String> {
     if let Some(existing) = app.get_webview(&label) {
         existing.close().map_err(|e: tauri::Error| e.to_string())?;
@@ -240,9 +243,112 @@ async fn create_server_webview(
         .get_window("main")
         .ok_or_else(|| "Main window not found".to_string())?;
 
+    // Build the device-preference override script with the chosen device IDs
+    // baked in at webview creation time. It patches getUserMedia, enumerateDevices,
+    // and auto-applies setSinkId on audio/video elements so the Sharkord server
+    // can only ever see / use the devices the user has selected.
+    let mic_js    = mic_id    .as_deref().unwrap_or("");
+    let cam_js    = cam_id    .as_deref().unwrap_or("");
+    let speaker_js = speaker_id.as_deref().unwrap_or("");
+    let device_script = format!(r#"
+(function(){{
+  var MIC_ID     = {mic_json};
+  var CAM_ID     = {cam_json};
+  var SPEAKER_ID = {speaker_json};
+
+  /* ── Helpers: resolve a stored device label to a live deviceId ─────── */
+  // Device IDs are not stable across isolated WebView2 contexts (each server
+  // webview has its own data directory, so the browser assigns different IDs
+  // to the same physical device). Labels ARE stable — we use those instead.
+  function _resolveId(kind, label) {{
+    // Returns a Promise<string|null>
+    var _e = navigator.mediaDevices.enumerateDevices.__ss_orig ||
+             navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+    return _e().then(function(all) {{
+      var match = all.find(function(d) {{ return d.kind === kind && d.label === label; }});
+      return match ? match.deviceId : null;
+    }});
+  }}
+
+  /* ── getUserMedia: force selected device by label ───────────────────── */
+  var _gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = function(c) {{
+    c = c ? JSON.parse(JSON.stringify(c)) : {{}};
+    var promises = [];
+    if (MIC_ID && c.audio) {{
+      promises.push(_resolveId('audioinput', MIC_ID).then(function(id) {{
+        if (id) c.audio = typeof c.audio === 'object'
+          ? Object.assign({{}}, c.audio, {{ deviceId: {{ exact: id }} }})
+          : {{ deviceId: {{ exact: id }} }};
+      }}));
+    }}
+    if (CAM_ID && c.video) {{
+      promises.push(_resolveId('videoinput', CAM_ID).then(function(id) {{
+        if (id) c.video = typeof c.video === 'object'
+          ? Object.assign({{}}, c.video, {{ deviceId: {{ exact: id }} }})
+          : {{ deviceId: {{ exact: id }} }};
+      }}));
+    }}
+    return Promise.all(promises).then(function() {{ return _gum(c); }});
+  }};
+
+  /* ── enumerateDevices: hide unselected devices (filter by label) ─────── */
+  var _enum = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+  // Store original so _resolveId can bypass our override
+  navigator.mediaDevices.enumerateDevices.__ss_orig = _enum;
+  navigator.mediaDevices.enumerateDevices = function() {{
+    return _enum().then(function(all) {{
+      return all.filter(function(d) {{
+        // Always pass through devices with empty deviceId or label — these are
+        // returned before permission is granted (browser privacy masking).
+        if (!d.deviceId || !d.label) return true;
+        if (d.kind === 'audioinput')  return !MIC_ID     || d.deviceId === 'default' || d.label === MIC_ID;
+        if (d.kind === 'videoinput')  return !CAM_ID     || d.label === CAM_ID;
+        if (d.kind === 'audiooutput') return !SPEAKER_ID || d.deviceId === 'default' || d.label === SPEAKER_ID;
+        return true;
+      }});
+    }});
+  }};
+
+  /* ── setSinkId: auto-apply speaker to all audio/video elements ──────── */
+  if (SPEAKER_ID) {{
+    // Resolve speaker label to actual deviceId for setSinkId
+    var _resolvedSpeakerId = null;
+    _resolveId('audiooutput', SPEAKER_ID).then(function(id) {{ _resolvedSpeakerId = id; }});
+    function _sink(el) {{
+      if (el.setSinkId && !el.__ssSink) {{
+        el.__ssSink = true;
+        var sid = _resolvedSpeakerId || SPEAKER_ID;
+        el.setSinkId(sid).catch(function(){{}});
+      }}
+    }}
+    var _obs = new MutationObserver(function(ms) {{
+      ms.forEach(function(m) {{
+        m.addedNodes.forEach(function(n) {{
+          if (n.nodeType !== 1) return;
+          if (n.tagName === 'AUDIO' || n.tagName === 'VIDEO') _sink(n);
+          if (n.querySelectorAll) n.querySelectorAll('audio,video').forEach(_sink);
+        }});
+      }});
+    }});
+    _obs.observe(document.documentElement, {{ subtree: true, childList: true }});
+    document.addEventListener('DOMContentLoaded', function() {{
+      document.querySelectorAll('audio,video').forEach(_sink);
+    }});
+  }}
+}})();
+"#,
+        mic_json     = serde_json::to_string(mic_js)    .unwrap_or_default(),
+        cam_json     = serde_json::to_string(cam_js)    .unwrap_or_default(),
+        speaker_json = serde_json::to_string(speaker_js).unwrap_or_default(),
+    );
+
+    let combined_init = format!("{CONTEXT_MENU_SCRIPT}
+{device_script}");
+
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
         .data_directory(data_dir)
-        .initialization_script(CONTEXT_MENU_SCRIPT);
+        .initialization_script(&combined_init);
 
     // data_store_identifier adds WebView2-level environment isolation on Windows,
     // on top of the separate data_directory above.

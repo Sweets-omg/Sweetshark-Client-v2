@@ -15,6 +15,8 @@ import {
   destroyServerWebview,
   refreshServerWebview,
   resizeAllServerWebviews,
+  updateServerWebviewDevices,
+  type DevicePrefs,
 } from "./lib/webviewManager";
 import RenameServerDialog from "./components/RenameServerDialog";
 import ChangeIconDialog from "./components/ChangeIconDialog";
@@ -58,6 +60,7 @@ export default function App() {
   // Used to lazily create webviews only on first selection.
   const createdWebviews = useRef<Set<string>>(new Set());
   const storeRef = useRef<Store | null>(null);
+  const devicePrefsRef = useRef<DevicePrefs>({});
   const prevActiveView = useRef<ActiveView>("home");
 
   const openModal = useCallback(() => setIsModalOpen(true), []);
@@ -86,6 +89,9 @@ export default function App() {
           if (appearance.sidebarBg) root.style.setProperty("--sidebar-bg", appearance.sidebarBg);
           if (appearance.serverCircleBg) root.style.setProperty("--server-circle-bg", appearance.serverCircleBg);
         }
+        // Load device preferences so webviews know which devices to expose
+        const savedDevicePrefs = await store.get<DevicePrefs>("devicePreferences");
+        if (savedDevicePrefs) devicePrefsRef.current = savedDevicePrefs;
         setIsStoreLoaded(true);
       })
       .catch((e) => {
@@ -149,7 +155,7 @@ export default function App() {
       if (!createdWebviews.current.has(view)) {
         // First time this server is selected: create its webview.
         try {
-          await createServerWebview(view, server.url);
+          await createServerWebview(view, server.url, devicePrefsRef.current);
           createdWebviews.current.add(view);
           await showServerWebview(view);
         } catch (e) {
@@ -193,7 +199,7 @@ export default function App() {
 
       if (IS_TAURI) {
         try {
-          await createServerWebview(id, inviteUrl ?? baseUrl);
+          await createServerWebview(id, inviteUrl ?? baseUrl, devicePrefsRef.current);
           createdWebviews.current.add(id);
           await showServerWebview(id);
         } catch (e) {
@@ -272,6 +278,28 @@ export default function App() {
     closeModal();
   }, [closeModal]);
 
+  // ── Device prefs change: update ref + recreate live webviews ────────────
+  const handleDevicePrefsChange = useCallback(async (prefs: DevicePrefs) => {
+    devicePrefsRef.current = prefs;
+    if (!IS_TAURI) return;
+    // Recreate every live webview so the new initialization_script fires.
+    // Hide all webviews first — createServerWebview can briefly make a webview
+    // visible, which would overlay the settings page we're currently on.
+    await hideAllServerWebviews().catch(console.error);
+    for (const server of servers) {
+      if (createdWebviews.current.has(server.id)) {
+        try {
+          await updateServerWebviewDevices(server.id, server.url, prefs);
+        } catch (e) {
+          console.error("Failed to update device prefs for webview:", server.id, e);
+        }
+      }
+    }
+    // Keep all webviews hidden — the visibility useEffect will show the right
+    // one if the user navigates back to a server.
+    await hideAllServerWebviews().catch(console.error);
+  }, [servers]);
+
   const isServerActive = servers.some((s) => s.id === activeView);
   const activeServer = servers.find((s) => s.id === activeView);
 
@@ -301,7 +329,7 @@ export default function App() {
           style={{ visibility: IS_TAURI && isServerActive ? "hidden" : "visible" }}
         >
           {activeView === "home" && <HomePage />}
-          {activeView === "settings" && <SettingsPage />}
+          {activeView === "settings" && <SettingsPage onDevicePrefsChange={handleDevicePrefsChange} />}
           {isServerActive && activeServer && (
             <ServerLoadingPage server={activeServer} onRemove={openRemoveDialog} />
           )}

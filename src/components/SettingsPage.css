@@ -1,18 +1,23 @@
+/* ── Page shell ──────────────────────────────────────────────────────────── */
 .settings-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 32px 40px;
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--window-bg);
+  box-sizing: border-box;
 }
 
+/* ── Header ──────────────────────────────────────────────────────────────── */
 .settings-header {
+  padding: 28px 36px 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .settings-title {
@@ -27,29 +32,38 @@
   color: var(--text-secondary);
 }
 
-/* Section card */
-.settings-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  overflow: hidden;
+/* ── Sections container ──────────────────────────────────────────────────── */
+.settings-body {
+  padding: 4px 36px 36px;
+  display: flex;
+  flex-direction: column;
 }
 
+/* ── Section group ───────────────────────────────────────────────────────── */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Section title row */
 .settings-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px 10px;
+  padding: 24px 0 10px;
 }
 
 .settings-section-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
+/* ── Reset all button ────────────────────────────────────────────────────── */
 .settings-reset-all-btn {
   display: flex;
   align-items: center;
@@ -66,42 +80,59 @@
   background: var(--bg-hover);
 }
 
-/* Row */
+/* ── Section note ────────────────────────────────────────────────────────── */
+.settings-section-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 0 0 8px;
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
 .settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-top: 1px solid var(--border-subtle);
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border-subtle);
   gap: 16px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
 }
 
 .settings-row-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   flex: 1;
+  min-width: 0;
 }
 
 .settings-row-label {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
 .settings-row-desc {
   font-size: 12px;
   color: var(--text-secondary);
+  word-break: break-word;
 }
 
 .settings-row-controls {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  flex-wrap: wrap;
 }
 
-/* Color swatch */
+/* ── Color swatch ────────────────────────────────────────────────────────── */
 .color-swatch-wrap {
   cursor: pointer;
   display: flex;
@@ -109,9 +140,9 @@
 }
 
 .color-swatch {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
   border: 1.5px solid rgba(255,255,255,0.12);
   transition: transform 0.15s, box-shadow 0.15s;
 }
@@ -128,16 +159,17 @@
   pointer-events: none;
 }
 
-/* Hex input */
+/* ── Hex input ───────────────────────────────────────────────────────────── */
 .settings-hex-input {
   width: 90px;
+  min-width: 70px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 6px 10px;
+  padding: 5px 9px;
   outline: none;
   letter-spacing: 0.04em;
   font-family: 'Courier New', monospace;
@@ -147,10 +179,10 @@
   border-color: var(--accent);
 }
 
-/* Reset button */
+/* ── Reset button ────────────────────────────────────────────────────────── */
 .settings-reset-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -163,38 +195,141 @@
   background: var(--bg-hover);
 }
 .settings-reset-btn--dim {
-  opacity: 0.35;
+  opacity: 0.3;
   pointer-events: none;
 }
 
-/* Preview */
+/* ── Permission badges ───────────────────────────────────────────────────── */
+.sp-perm-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sp-badge--granted {
+  background: rgba(59, 165, 92, 0.15);
+  color: #57f287;
+}
+
+.sp-badge--denied {
+  background: rgba(237, 66, 69, 0.15);
+  color: #ff5c5e;
+}
+
+.sp-badge--prompt {
+  background: rgba(160, 160, 180, 0.10);
+  color: var(--text-muted);
+}
+
+.sp-badge--info {
+  background: rgba(160, 160, 180, 0.08);
+  color: var(--text-muted);
+}
+
+/* ── Request permission button ───────────────────────────────────────────── */
+.sp-request-btn {
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.sp-request-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.sp-request-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Device picker select ────────────────────────────────────────────────── */
+.sp-device-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 32px 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 160px;
+  max-width: 280px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.12s;
+}
+.sp-device-select:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.sp-device-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.sp-device-select option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .sp-device-select {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+  .settings-header {
+    padding: 20px 18px 0;
+  }
+  .settings-body {
+    padding: 4px 18px 24px;
+  }
+}
+
+/* ── Preview ─────────────────────────────────────────────────────────────── */
 .settings-preview {
-  margin: 0 18px 18px;
+  margin-top: 4px;
   border-radius: 10px;
   overflow: hidden;
   display: flex;
   border: 1px solid rgba(255,255,255,0.07);
-  height: 120px;
+  height: 110px;
 }
 
 .preview-sidebar {
-  width: 52px;
+  width: 48px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   flex-shrink: 0;
 }
 
 .preview-circle {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.02em;
@@ -202,33 +337,33 @@
 
 .preview-content {
   flex: 1;
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .preview-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .preview-button {
   align-self: flex-start;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #fff;
   cursor: default;
 }
 
 .preview-input {
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 5px 9px;
+  font-size: 11px;
   color: var(--text-muted);
 }
