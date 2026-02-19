@@ -355,7 +355,12 @@ async fn create_server_webview(
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed_url))
         .data_directory(data_dir)
-        .initialization_script(&combined_init);
+        .initialization_script(&combined_init)
+        // Tauri intercepts drag-and-drop at the OS level by default, which
+        // prevents the browser's native DataTransfer / drop events from firing
+        // inside the webview. Disabling it lets Sharkord's file upload handler
+        // receive drag-and-drop events exactly as it would in a normal browser.
+        .disable_drag_drop_handler();
 
     // data_store_identifier adds WebView2-level environment isolation on Windows,
     // on top of the separate data_directory above.
