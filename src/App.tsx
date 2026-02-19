@@ -4,7 +4,7 @@ import iconSrc from "./assets/icon.png";
 import Sidebar, { type PttIndicatorState } from "./components/Sidebar";
 import TitleBar from "./components/TitleBar";
 import HomePage from "./components/HomePage";
-import SettingsPage from "./components/SettingsPage";
+import SettingsPage, { type PttConfig } from "./components/SettingsPage";
 import ServerLoadingPage from "./components/ServerLoadingPage";
 import AddServerDialog from "./components/AddServerDialog";
 import { load, Store } from "@tauri-apps/plugin-store";
@@ -62,6 +62,9 @@ export default function App() {
   const createdWebviews = useRef<Set<string>>(new Set());
   const storeRef = useRef<Store | null>(null);
   const devicePrefsRef = useRef<DevicePrefs>({});
+  // Stored PTT key tokens (browser key names) for use in the keyboard listener
+  const pttKeysRef = useRef<string[]>([]);
+  const pttEnabledRef = useRef<boolean>(false);
   const prevActiveView = useRef<ActiveView>("home");
 
   const openModal = useCallback(() => setIsModalOpen(true), []);
@@ -93,6 +96,23 @@ export default function App() {
         // Load device preferences so webviews know which devices to expose
         const savedDevicePrefs = await store.get<DevicePrefs>("devicePreferences");
         if (savedDevicePrefs) devicePrefsRef.current = savedDevicePrefs;
+
+        // Load and apply PTT config immediately on startup — do NOT wait for the
+        // user to visit Settings. This ensures PTT works and the mic is muted
+        // (if PTT was enabled) from the moment the app opens.
+        const savedPtt = await store.get<PttConfig>("pttConfig");
+        if (savedPtt?.enabled && savedPtt.tauriKeys?.length > 0) {
+          try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            await invoke("set_ptt_config", { keys: savedPtt.tauriKeys, enabled: true });
+            pttKeysRef.current = savedPtt.keys ?? [];
+            pttEnabledRef.current = true;
+            setPttState("muted");
+          } catch (e) {
+            console.error("Failed to apply PTT config on startup:", e);
+          }
+        }
+
         setIsStoreLoaded(true);
       })
       .catch((e) => {
@@ -138,8 +158,48 @@ export default function App() {
   // ── PTT: update indicator state when ptt config changes ──────────────────
   // SettingsPage manages PTT registration; we just need to keep the indicator
   // in sync. We expose a callback that App.tsx sets the right base state on.
-  const handlePttEnabledChange = useCallback((enabled: boolean) => {
+  const handlePttEnabledChange = useCallback((enabled: boolean, keys?: string[]) => {
+    pttEnabledRef.current = enabled;
+    if (keys !== undefined) pttKeysRef.current = keys;
     setPttState(enabled ? "muted" : "off");
+  }, []);
+
+  // ── PTT: keyboard listener for home/settings pages ────────────────────────
+  // When a server webview is NOT active (home or settings page), the main React
+  // window has keyboard focus. GetAsyncKeyState in the Rust poll thread can be
+  // unreliable here because WebView2 may consume the key event before the OS
+  // key-state table is updated, causing flickering press/release pairs.
+  // We fix this by directly tracking keydown/keyup in the React window and
+  // overriding pttState from here when no server is active.
+  useEffect(() => {
+    const heldKeys = new Set<string>();
+
+    const updatePttFromHeld = () => {
+      if (!pttEnabledRef.current || pttKeysRef.current.length === 0) return;
+      // Normalize: browser key names match what's stored in pttConfig.keys
+      const allHeld = pttKeysRef.current.every(k => heldKeys.has(k));
+      setPttState(s => {
+        if (s === "off") return "off"; // PTT disabled, don't touch
+        return allHeld ? "active" : "muted";
+      });
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      heldKeys.add(e.key);
+      updatePttFromHeld();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      heldKeys.delete(e.key);
+      updatePttFromHeld();
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      heldKeys.clear();
+    };
   }, []);
 
   // ── Webview visibility: show active server webview, hide all others ────────

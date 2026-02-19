@@ -345,56 +345,9 @@ async fn create_server_webview(
     );
 
 
-    // PTT mute/unmute script — injected into every server webview.
-    // Listens for Tauri "ptt://pressed" / "ptt://released" events and
-    // mutes/unmutes all live audio tracks obtained via getUserMedia.
-    const PTT_SCRIPT: &str = r#"
-(function() {
-  // Track all live audio tracks so we can mute/unmute them
-  var _audioTracks = [];
-
-  // Patch getUserMedia to intercept audio tracks
-  var _gumOrig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-  // We wrap the ALREADY-patched getUserMedia (device filter) from the device script.
-  // By using a MutationObserver trick we ensure we run after it.
-  // Actually we just patch at DOMContentLoaded time so both scripts are applied.
-  function _patchGum() {
-    var _prev = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = function(constraints) {
-      return _prev(constraints).then(function(stream) {
-        stream.getAudioTracks().forEach(function(track) {
-          _audioTracks.push(track);
-          track.addEventListener('ended', function() {
-            _audioTracks = _audioTracks.filter(function(t) { return t !== track; });
-          });
-        });
-        return stream;
-      });
-    };
-  }
-  _patchGum();
-
-  function _setMuted(muted) {
-    _audioTracks.forEach(function(t) {
-      try { t.enabled = !muted; } catch(e) {}
-    });
-    // Also mute/unmute any <audio>/<video> elements' srcObject tracks
-    document.querySelectorAll('audio, video').forEach(function(el) {
-      if (el.srcObject && el.srcObject.getAudioTracks) {
-        el.srcObject.getAudioTracks().forEach(function(t) {
-          try { t.enabled = !muted; } catch(e) {}
-        });
-      }
-    });
-  }
-
-  // Listen for PTT events from the Tauri backend via window.__TAURI_INTERNALS__
-  if (window.__TAURI_INTERNALS__) {
-    window.__TAURI__.event.listen('ptt://pressed',  function() { _setMuted(false); });
-    window.__TAURI__.event.listen('ptt://released', function() { _setMuted(true);  });
-  }
-})();
-"#;
+    // PTT is now handled at the OS level via IAudioEndpointVolume (Windows Core
+    // Audio API). No JavaScript injection needed for mute control.
+    const PTT_SCRIPT: &str = "";
 
     let combined_init = format!("{CONTEXT_MENU_SCRIPT}
 {device_script}
@@ -632,6 +585,48 @@ fn token_to_vk(_token: &str) -> Option<u32> { None }
 ///     exits the list is dropped and no key state is ever read again.
 ///   • No data leaves the process: the only output is a boolean
 ///     "ptt://pressed" / "ptt://released" Tauri event.
+/// Mute or unmute the default Windows microphone at the OS/driver level using
+/// the Core Audio API (IAudioEndpointVolume). This is reliable regardless of
+/// how the web app (mediasoup/WebRTC) manages its audio pipeline internally.
+#[cfg(windows)]
+fn ptt_set_mic_mute(muted: bool) {
+    use windows::{
+        Win32::Media::Audio::{eCapture, eConsole, IMMDeviceEnumerator, MMDeviceEnumerator, Endpoints::IAudioEndpointVolume},
+        Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED},
+        Win32::Foundation::BOOL,
+    };
+
+    unsafe {
+        let hr_init = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let com_inited = hr_init.is_ok() || hr_init.0 == 1; // S_OK or S_FALSE
+
+        let enumerator: Result<IMMDeviceEnumerator, _> =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL);
+        let Ok(enumerator) = enumerator else {
+            if com_inited { CoUninitialize(); }
+            return;
+        };
+
+        let Ok(device) = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole) else {
+            if com_inited { CoUninitialize(); }
+            return;
+        };
+
+        let Ok(vol) = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None) else {
+            if com_inited { CoUninitialize(); }
+            return;
+        };
+
+        let mute_val = BOOL::from(muted);
+        let _ = vol.SetMute(mute_val, std::ptr::null());
+
+        if com_inited { CoUninitialize(); }
+    }
+}
+
+#[cfg(not(windows))]
+fn ptt_set_mic_mute(_muted: bool) {}
+
 #[cfg(windows)]
 fn start_ptt_hook(
     app: AppHandle,
@@ -655,6 +650,8 @@ fn start_ptt_hook(
                 // Exit as soon as the stop signal arrives.
                 if stop_rx.try_recv().is_ok() {
                     if was_active {
+                        // Re-mute on disable so audio doesn't stay open.
+                        ptt_set_mic_mute(true);
                         let _ = app.emit("ptt://released", ());
                     }
                     // vks is dropped here — no key state is read after this point.
@@ -674,9 +671,13 @@ fn start_ptt_hook(
 
                 if all_down && !was_active {
                     was_active = true;
+                    // Unmute: PTT key pressed → allow microphone audio through.
+                    ptt_set_mic_mute(false);
                     let _ = app.emit("ptt://pressed", ());
                 } else if !all_down && was_active {
                     was_active = false;
+                    // Mute: PTT key released → silence microphone.
+                    ptt_set_mic_mute(true);
                     let _ = app.emit("ptt://released", ());
                 }
 
@@ -733,8 +734,15 @@ async fn set_ptt_config(
             return Err(format!("No recognisable keys in: {:?}", keys));
         }
 
+        // PTT starting: webviews begin in muted state (the init script already
+        // does this, but ensure any already-running webviews are muted too).
+        ptt_set_mic_mute(true);
+
         let stop_tx = start_ptt_hook(app, vk_set);
         state.lock().unwrap().stop_tx = Some(stop_tx);
+    } else {
+        // PTT disabled: restore normal open-mic behaviour in all webviews.
+        ptt_set_mic_mute(false);
     }
 
     Ok(())

@@ -231,7 +231,7 @@ function DeviceSelect({ label, description, devices, selectedId, permStatus, onC
 
 interface SettingsPageProps {
   onDevicePrefsChange?: (prefs: DevicePrefs) => void;
-  onPttEnabledChange?: (enabled: boolean) => void;
+  onPttEnabledChange?: (enabled: boolean, keys?: string[]) => void;
 }
 
 export default function SettingsPage({ onDevicePrefsChange, onPttEnabledChange }: SettingsPageProps) {
@@ -273,10 +273,10 @@ export default function SettingsPage({ onDevicePrefsChange, onPttEnabledChange }
       setMicPerm(mic);
       setCamPerm(cam);
       setPttConfig(ptt);
-      // Re-register PTT shortcut on startup (in case app was restarted)
+      // Sync PTT indicator state — App.tsx already called set_ptt_config on startup,
+      // so we just need to update the indicator and key refs here.
       if (ptt.enabled && ptt.tauriKeys.length > 0) {
-        applyPttConfig(ptt);
-        onPttEnabledChange?.(true);
+        onPttEnabledChange?.(true, ptt.keys);
       }
       setLoaded(true);
       if (mic === "granted" || cam === "granted") await refreshDevices();
@@ -343,7 +343,7 @@ export default function SettingsPage({ onDevicePrefsChange, onPttEnabledChange }
                   setPttConfig(next);
                   savePttConfig(next);
                   applyPttConfig(next);
-                  onPttEnabledChange?.(next.enabled);
+                  onPttEnabledChange?.(next.enabled, next.keys);
                 }}
               >
                 <span className="ptt-toggle-knob" />
@@ -482,7 +482,10 @@ export default function SettingsPage({ onDevicePrefsChange, onPttEnabledChange }
           const next = { ...pttConfig, keys, tauriKeys };
           setPttConfig(next);
           savePttConfig(next);
-          if (next.enabled) applyPttConfig(next);
+          if (next.enabled) {
+            applyPttConfig(next);
+            onPttEnabledChange?.(true, keys);
+          }
           setShowPttDialog(false);
         }}
         onCancel={() => setShowPttDialog(false)}

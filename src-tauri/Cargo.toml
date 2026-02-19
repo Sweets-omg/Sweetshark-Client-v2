@@ -34,6 +34,7 @@ url = "2"
 
 # Windows-only: native WebView2 settings access (must match Tauri's internal versions)
 [target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_Foundation"] }
 webview2-com = "0.38"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
