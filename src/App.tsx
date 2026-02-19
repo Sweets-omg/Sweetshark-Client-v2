@@ -28,6 +28,7 @@ export interface Server {
   iconColor: string;
   iconUrl?: string;   // base64 data URL for custom icon, absent = letter
   keepLoaded?: boolean; // if false, webview is destroyed when not active (default true)
+  inviteUrl?: string;  // one-time URL used only on first load (e.g. with ?invite= param)
 }
 
 export type ActiveView = "home" | "settings" | string;
@@ -109,11 +110,13 @@ export default function App() {
   }, []);
 
   // ── Webview visibility: show active server webview, hide all others ────────
-  // Also hides everything while any modal is open — native webviews sit above
-  // the React layer at the OS compositor level regardless of CSS z-index.
+  // Native webviews sit above the React layer at the OS compositor level
+  // regardless of CSS z-index, so we must explicitly hide them whenever ANY
+  // overlay (context menu, rename/icon/remove dialog, add server dialog) is open.
   useEffect(() => {
     if (!IS_TAURI) return;
-    if (isModalOpen) {
+    const anyOverlayOpen = isModalOpen || !!renameTarget || !!iconChangeTarget || !!removeTarget;
+    if (anyOverlayOpen) {
       hideAllServerWebviews().catch(console.error);
       return;
     }
@@ -123,7 +126,7 @@ export default function App() {
     } else {
       hideAllServerWebviews().catch(console.error);
     }
-  }, [activeView, servers, isModalOpen]);
+  }, [activeView, servers, isModalOpen, renameTarget, iconChangeTarget, removeTarget]);
 
   // ── Server selection: lazily create webview on first visit ───────────────
   const handleSelectView = useCallback(
@@ -164,14 +167,33 @@ export default function App() {
       const id = crypto.randomUUID();
       const iconLetter = name.trim()[0]?.toUpperCase() ?? "?";
       const iconColor = genColor(servers.length);
-      const server: Server = { id, name, url, iconLetter, iconColor, ...(iconUrl ? { iconUrl } : {}) };
+
+      // If the URL contains an invite code, store the full URL for first load only
+      // and use the bare origin as the persistent server URL.
+      let baseUrl = url;
+      let inviteUrl: string | undefined;
+      try {
+        // The AddServerDialog shows "https://" as a visual prefix but may not include
+        // it in the value — normalise before parsing.
+        const normalised = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+        const parsed = new URL(normalised);
+        if (parsed.searchParams.has("invite")) {
+          inviteUrl = normalised;
+          parsed.search = "";
+          baseUrl = parsed.toString().replace(/\/$/, "");
+        } else {
+          baseUrl = normalised;
+        }
+      } catch { /* invalid URL — leave as-is */ }
+
+      const server: Server = { id, name, url: baseUrl, iconLetter, iconColor, ...(iconUrl ? { iconUrl } : {}) };
 
       setServers((prev) => [...prev, server]);
       setActiveView(id);
 
       if (IS_TAURI) {
         try {
-          await createServerWebview(id, url);
+          await createServerWebview(id, inviteUrl ?? baseUrl);
           createdWebviews.current.add(id);
           await showServerWebview(id);
         } catch (e) {
