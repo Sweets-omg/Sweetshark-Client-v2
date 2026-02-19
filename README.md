@@ -2,7 +2,7 @@
 
 A multi-server Sharkord client built with **Tauri 2 + React + TypeScript**.
 
-Instead of re-implementing Sharkord's API, Sweetshark embeds the **real Sharkord web app** (voice, video, text, reactions, file uploads — everything) in a native Tauri WebView per server. The sidebar is a lightweight React shell; each server pane is a live, isolated WebView pointing at that server's URL.
+Sweetshark embeds the Sharkord web app in a native Tauri WebView per server. The sidebar is a lightweight React shell; each server pane is a live, isolated WebView pointing at that server's URL.
 
 ## Features
 
