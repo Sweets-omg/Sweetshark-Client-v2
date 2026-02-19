@@ -420,6 +420,46 @@ async fn reload_server_webview(app: AppHandle, label: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+/// Delete the on-disk data directory for a server that has been removed.
+/// Called by the frontend after destroying the webview so all cached cookies,
+/// IndexedDB, localStorage, and WebView2 profile data are fully wiped.
+///
+/// On Windows, WebView2 holds an exclusive lock on its data directory until
+/// the browser process fully exits. We retry deletion for up to ~3 seconds
+/// to give the process time to release the lock after wv.close() returns.
+async fn delete_server_data(app: AppHandle, server_id: String) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e: tauri::Error| e.to_string())?
+        .join("servers")
+        .join(&server_id);
+
+    if !data_dir.exists() {
+        return Ok(()); // already gone
+    }
+
+    // Retry loop: WebView2 on Windows keeps files locked for a short time after
+    // the webview is closed. Retry every 200 ms for up to 3 seconds.
+    let max_attempts = 15u32;
+    let mut last_err = String::new();
+    for attempt in 0..max_attempts {
+        match std::fs::remove_dir_all(&data_dir) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                last_err = e.to_string();
+                // Only sleep between retries, not after the last attempt
+                if attempt + 1 < max_attempts {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+    }
+
+    Err(format!("Failed to delete server data for {server_id} after {max_attempts} attempts: {last_err}"))
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Sweetshark Client.", name)
 }
@@ -774,6 +814,7 @@ pub fn run() {
             open_url,
             create_server_webview,
             reload_server_webview,
+            delete_server_data,
             get_ptt_config,
             set_ptt_config,
             get_ptt_active,

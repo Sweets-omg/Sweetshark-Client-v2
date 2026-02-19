@@ -104,6 +104,13 @@ export async function destroyServerWebview(serverId: string): Promise<void> {
   }
 }
 
+export async function deleteServerData(serverId: string): Promise<void> {
+  // Small delay to give WebView2 time to release its file lock on the data
+  // directory after the webview has been closed.
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await invoke<void>("delete_server_data", { serverId });
+}
+
 export async function refreshServerWebview(serverId: string): Promise<void> {
   if (!pool.has(serverId)) return;
   const label = webviewLabel(serverId);

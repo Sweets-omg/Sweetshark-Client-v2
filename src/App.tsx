@@ -13,6 +13,7 @@ import {
   showServerWebview,
   hideAllServerWebviews,
   destroyServerWebview,
+  deleteServerData,
   refreshServerWebview,
   resizeAllServerWebviews,
   updateServerWebviewDevices,
@@ -357,6 +358,7 @@ export default function App() {
   const confirmRemove = useCallback(async (id: string) => {
     if (IS_TAURI) {
       await destroyServerWebview(id).catch(console.error);
+      await deleteServerData(id).catch(console.error);
       createdWebviews.current.delete(id);
     }
     setServers((prev) => prev.filter((s) => s.id !== id));
