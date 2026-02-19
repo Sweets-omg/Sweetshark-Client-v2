@@ -4,6 +4,16 @@ A multi-server Sharkord client built with **Tauri 2 + React + TypeScript**.
 
 Instead of re-implementing Sharkord's API, Sweetshark embeds the **real Sharkord web app** (voice, video, text, reactions, file uploads — everything) in a native Tauri WebView per server. The sidebar is a lightweight React shell; each server pane is a live, isolated WebView pointing at that server's URL.
 
+## Features
+
+- 🏠 Home + Settings pages (native React)
+- ➕ Add multiple Sharkord servers by URL
+- 🔄 Instant server switching — each WebView keeps its state
+- 🎙️ Full voice/video/screen share via Sharkord's WebRTC
+- 🗑️ Remove servers (destroys and cleans up the WebView)
+- 🪟 Custom title bar, native window controls
+- 🦀 Tauri 2 — not Electron
+
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (latest stable)
@@ -40,16 +50,6 @@ npm run tauri build # production binary
 
 Each server you add gets its own isolated WebView at `http://yourserver:4991`.
 Switching servers instantly shows/hides the appropriate WebView — state is preserved.
-
-## Features
-
-- 🏠 Home + Settings pages (native React)
-- ➕ Add multiple Sharkord servers by URL
-- 🔄 Instant server switching — each WebView keeps its state
-- 🎙️ Full voice/video/screen share via Sharkord's WebRTC
-- 🗑️ Remove servers (destroys and cleans up the WebView)
-- 🪟 Custom title bar, native window controls
-- 🦀 Tauri 2 — not Electron
 
 ## Project Structure
 
