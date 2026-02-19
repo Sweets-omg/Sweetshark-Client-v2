@@ -22,6 +22,7 @@ import {
 import RenameServerDialog from "./components/RenameServerDialog";
 import ChangeIconDialog from "./components/ChangeIconDialog";
 import ConfirmRemoveDialog from "./components/ConfirmRemoveDialog";
+import UpdateDialog from "./components/UpdateDialog";
 
 export interface Server {
   id: string;
@@ -57,6 +58,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pttState,    setPttState]    = useState<PttIndicatorState>("off");
   const [isStoreLoaded, setIsStoreLoaded] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string } | null>(null);
 
   // Tracks which server IDs already have a live webview in the pool.
   // Used to lazily create webviews only on first selection.
@@ -115,6 +117,29 @@ export default function App() {
         }
 
         setIsStoreLoaded(true);
+
+        // ── Update check ────────────────────────────────────────────────────
+        // Run after store is loaded so we can read the "never ask" preference.
+        // Intentionally fire-and-forget (no await) so it doesn't delay startup.
+        (async () => {
+          try {
+            const disabled = await store.get<boolean>("updateCheckDisabled");
+            if (disabled) return;
+            const { invoke } = await import("@tauri-apps/api/core");
+            const [current, latestTag] = await Promise.all([
+              invoke<string>("get_app_version"),
+              invoke<string>("check_for_update"),
+            ]);
+            if (!latestTag) return; // network unavailable or no releases yet
+            // Tags are "V.2.0.1" — strip the leading "V." before comparing
+            const latest = latestTag.replace(/^V\./i, "");
+            if (latest !== current) {
+              setUpdateInfo({ current, latest: latestTag });
+            }
+          } catch (e) {
+            console.error("Update check failed:", e);
+          }
+        })();
       })
       .catch((e) => {
         console.error("Failed to load store:", e);
@@ -392,6 +417,28 @@ export default function App() {
   const isServerActive = servers.some((s) => s.id === activeView);
   const activeServer = servers.find((s) => s.id === activeView);
 
+  // ── Update dialog handlers ────────────────────────────────────────────────
+  const handleUpdateYes = useCallback(async () => {
+    setUpdateInfo(null);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_url", { url: "https://github.com/Sweets-omg/Sweetshark-Client-v2/releases/latest" });
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const handleUpdateNo = useCallback(() => {
+    // Dismiss for this session only — dialog reappears on next boot
+    setUpdateInfo(null);
+  }, []);
+
+  const handleUpdateNever = useCallback(async () => {
+    setUpdateInfo(null);
+    try {
+      const store = await load("config.json", { autoSave: true });
+      await store.set("updateCheckDisabled", true);
+    } catch (e) { console.error(e); }
+  }, []);
+
   return (
     <div className="app-shell">
       <TitleBar iconSrc={iconSrc} />
@@ -461,6 +508,16 @@ export default function App() {
           server={removeTarget}
           onConfirm={() => confirmRemove(removeTarget.id)}
           onCancel={() => { setRemoveTarget(null); closeModal(); }}
+        />
+      )}
+
+      {updateInfo && (
+        <UpdateDialog
+          currentVersion={updateInfo.current}
+          latestVersion={updateInfo.latest}
+          onUpdate={handleUpdateYes}
+          onIgnore={handleUpdateNo}
+          onNeverAskAgain={handleUpdateNever}
         />
       )}
     </div>

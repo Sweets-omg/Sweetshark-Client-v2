@@ -469,6 +469,47 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to Sweetshark Client.", name)
 }
 
+/// Returns the current app version string from the compiled-in Cargo.toml version.
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Checks the GitHub releases API for the latest release tag on the
+/// Sweets-omg/Sweetshark-Client-v2 repo and returns it as a string,
+/// or an empty string if the check fails (network unavailable, etc.).
+/// Tags are expected in the format "V.X.X.X" (e.g. "V.2.0.1").
+#[tauri::command]
+async fn check_for_update() -> String {
+    let client = match reqwest::Client::builder()
+        .user_agent("Sweetshark-Client-v2-updater")
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return String::new(),
+    };
+
+    let res = client
+        .get("https://api.github.com/repos/Sweets-omg/Sweetshark-Client-v2/releases/latest")
+        .send()
+        .await;
+
+    let body = match res {
+        Ok(r) => match r.json::<serde_json::Value>().await {
+            Ok(j) => j,
+            Err(_) => return String::new(),
+        },
+        Err(_) => return String::new(),
+    };
+
+    // GitHub returns { "tag_name": "V.2.0.1", ... }
+    body["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .to_string()
+}
+
 #[tauri::command]
 async fn open_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
@@ -816,6 +857,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            get_app_version,
+            check_for_update,
             open_url,
             create_server_webview,
             reload_server_webview,
